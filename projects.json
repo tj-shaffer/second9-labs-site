@@ -1,0 +1,62 @@
+{
+  "projects": [
+    {
+      "id": "riverside-dental-intake",
+      "title": "Riverside Dental — digital intake",
+      "client": "Riverside Dental Group",
+      "year": "2026",
+      "tagline": "Replaced a clipboard and a fax machine with a five-minute online intake.",
+      "tags": ["Workflow automation", "Forms", "HIPAA-aware"],
+      "cover": "assets/images/placeholder-1.svg",
+      "images": [
+        "assets/images/placeholder-1.svg"
+      ],
+      "description": "Riverside was printing ten-page intake packets for every new patient, then manually transcribing them into their records system. We shipped a tablet-friendly intake flow that saves the form directly into their existing software and flags incomplete submissions before the patient finishes checking in.",
+      "outcome": "New-patient intake dropped from 22 minutes to 4 minutes on average. Front-desk transcription time eliminated entirely.",
+      "stack": ["Next.js", "Tailwind", "Supabase", "TypeScript"],
+      "links": [
+        { "label": "Live site", "url": "#" },
+        { "label": "Source (private)", "url": "#" }
+      ],
+      "featured": true
+    },
+    {
+      "id": "oak-accounting-ai-triage",
+      "title": "Oak & Co. Accounting — email triage",
+      "client": "Oak & Co. Accounting",
+      "year": "2026",
+      "tagline": "An LLM assistant that sorts client emails, drafts routine replies, and flags anything it's unsure about.",
+      "tags": ["AI integration", "LLM", "Operations"],
+      "cover": "assets/images/placeholder-2.svg",
+      "images": [
+        "assets/images/placeholder-2.svg"
+      ],
+      "description": "A small accounting firm was losing hours every week sorting through repetitive client inquiries. We built a triage assistant that reads incoming email, categorizes it, drafts a reply for the partner to review, and escalates anything ambiguous. Runs locally on the firm's own infrastructure — no client data leaves the building.",
+      "outcome": "Estimated 6–8 hours of partner time saved per week. Zero client data shared with third-party AI providers.",
+      "stack": ["Python", "Claude API", "Postgres", "Local deployment"],
+      "links": [
+        { "label": "Case study", "url": "#" }
+      ],
+      "featured": true
+    },
+    {
+      "id": "maple-studio-dashboard",
+      "title": "Maple Studio — project dashboard",
+      "client": "Maple Architecture Studio",
+      "year": "2025",
+      "tagline": "One honest dashboard that replaced three spreadsheets and a whiteboard.",
+      "tags": ["Dashboards", "Internal tools"],
+      "cover": "assets/images/placeholder-3.svg",
+      "images": [
+        "assets/images/placeholder-3.svg"
+      ],
+      "description": "The studio was tracking project status across spreadsheets, a Trello board, and someone's head. We built a single dashboard showing live project health, budget burn, and upcoming deadlines — pulling from their existing tools so nothing had to change about how they actually work.",
+      "outcome": "Monday planning meetings dropped from 90 minutes to 20. Partners finally agree on which project is behind schedule.",
+      "stack": ["React", "Recharts", "Airtable API"],
+      "links": [
+        { "label": "Live site", "url": "#" }
+      ],
+      "featured": false
+    }
+  ]
+}
