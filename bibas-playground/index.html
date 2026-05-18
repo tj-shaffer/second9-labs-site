@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Biba's Playground — Second 9 Labs</title>
+<meta name="description" content="A little corner of small, playful apps — built one at a time, with love, for Biba." />
+<meta name="theme-color" content="#F2ECDE" />
+
+<link rel="icon" type="image/svg+xml" href="../assets/favicon.svg" />
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..900;1,9..144,400..900&family=DM+Sans:opsz,wght@9..40,300..700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="../styles.css" />
+<style>
+  /* Playground-only touches — warm, soft, a little hand-made. */
+  .playground-header { padding-top: clamp(4rem, 8vw, 7rem); }
+  .playground-header h1 .heart {
+    color: #D42A1F;
+    display: inline-block;
+    transform: translateY(2px);
+  }
+  .playground-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1.5rem;
+  }
+  .play-card {
+    display: block;
+    background: var(--paper);
+    border: 2px solid #141414;
+    border-radius: 6px;
+    padding: 1.75rem 1.5rem;
+    color: inherit;
+    text-decoration: none;
+    transition: transform 0.18s ease, box-shadow 0.18s ease;
+    position: relative;
+  }
+  .play-card:hover {
+    transform: translate(-3px, -3px);
+    box-shadow: 6px 6px 0 #141414;
+  }
+  .play-card .play-tag {
+    display: inline-block;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #1F4E8C;
+    margin-bottom: 0.75rem;
+  }
+  .play-card h3 {
+    font-family: 'Fraunces', serif;
+    font-size: 1.5rem;
+    margin: 0 0 0.5rem;
+  }
+  .play-card p {
+    margin: 0;
+    color: #4a4a4a;
+    font-size: 0.95rem;
+    line-height: 1.5;
+  }
+  .play-empty {
+    grid-column: 1 / -1;
+    padding: 3rem 2rem;
+    border: 2px dashed #14141440;
+    border-radius: 6px;
+    text-align: center;
+    font-family: 'Fraunces', serif;
+    font-style: italic;
+    color: #4a4a4a;
+    font-size: 1.15rem;
+  }
+  .play-empty .small {
+    font-family: 'DM Sans', sans-serif;
+    font-style: normal;
+    font-size: 0.9rem;
+    color: #6a6a6a;
+    margin-top: 0.5rem;
+  }
+</style>
+</head>
+<body>
+
+<!-- ============ NAV ============ -->
+<nav class="site">
+  <div class="wrap">
+    <a href="../index.html" class="logo" aria-label="Second 9 Labs home">
+      <svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <circle cx="52" cy="46" r="30" fill="#D42A1F"/>
+        <circle cx="52" cy="46" r="14" fill="#F2ECDE"/>
+        <rect x="76" y="46" width="14" height="58" fill="#141414"/>
+        <rect x="76" y="18" width="14" height="14" fill="#F2B01E"/>
+      </svg>
+      <span>Second <span class="nine">9</span> Labs</span>
+    </a>
+    <ul>
+      <li><a href="../index.html#services">Services</a></li>
+      <li><a href="../projects.html">Projects</a></li>
+      <li><a href="../index.html#process">Process</a></li>
+      <li><a href="../index.html#faq">FAQ</a></li>
+      <li><a href="../index.html#contact" class="nav-cta">Let's talk</a></li>
+    </ul>
+  </div>
+</nav>
+
+<!-- ============ HEADER ============ -->
+<header class="page-header playground-header">
+  <div class="wrap">
+    <p class="eyebrow">A personal corner</p>
+    <h1>Biba's <em class="accent-9">Playground</em> <span class="heart" aria-hidden="true">♥</span></h1>
+    <p class="lede">A little garden of small, playful apps — built one at a time, for the person who makes everything brighter. Pick something to play with below.</p>
+  </div>
+</header>
+
+<!-- ============ MINI-APP GRID ============ -->
+<section class="gallery-section">
+  <div class="wrap">
+    <div class="playground-grid" aria-live="polite">
+
+      <!-- Add a new mini-app by copying this template:
+      <a class="play-card" href="<app-slug>/">
+        <span class="play-tag">Category</span>
+        <h3>App name</h3>
+        <p>One-line description of what it does.</p>
+      </a>
+      -->
+
+      <div class="play-empty">
+        Something lovely is being built…
+        <div class="small">The first mini-app is on its way. Check back soon.</div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ============ FOOTER ============ -->
+<footer>
+  <div class="wrap">
+    <a href="../index.html" class="logo" aria-label="Second 9 Labs home">
+      <svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <circle cx="52" cy="46" r="30" fill="#D42A1F"/>
+        <circle cx="52" cy="46" r="14" fill="#F2ECDE"/>
+        <rect x="76" y="46" width="14" height="58" fill="#141414"/>
+        <rect x="76" y="18" width="14" height="14" fill="#F2B01E"/>
+      </svg>
+      <span>Second 9 Labs LLC</span>
+    </a>
+    <span>© 2026 · Built with care for human flourishing.</span>
+  </div>
+</footer>
+
+<script src="../script.js"></script>
+</body>
+</html>

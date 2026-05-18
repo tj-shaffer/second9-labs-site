@@ -29,7 +29,7 @@
     }
 
     mount.innerHTML = projects.map((p, i) => `
-      <a class="project-card reveal" href="project.html?id=${encodeURIComponent(p.id)}" style="transition-delay: ${Math.min(i * 0.08, 0.4)}s">
+      <a class="project-card reveal" href="${p.url ? escapeHtml(p.url) : 'project.html?id=' + encodeURIComponent(p.id)}" style="transition-delay: ${Math.min(i * 0.08, 0.4)}s">
         <div class="project-cover">
           <img src="${escapeHtml(p.cover)}" alt="" loading="lazy" />
         </div>
@@ -63,6 +63,10 @@
     }
 
     const project = projects.find(p => p.id === id);
+    if (project && project.url) {
+      window.location.replace(project.url);
+      return;
+    }
     if (!project) {
       mount.innerHTML = `
         <p class="eyebrow">Project not found</p>

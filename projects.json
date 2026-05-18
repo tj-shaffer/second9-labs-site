@@ -1,23 +1,18 @@
 {
   "projects": [
     {
-      "id": "riverside-dental-intake",
-      "title": "Riverside Dental — digital intake",
-      "client": "Riverside Dental Group",
+      "id": "bibas-playground",
+      "title": "Biba's Playground",
+      "client": "A little corner for Biba",
       "year": "2026",
-      "tagline": "Replaced a clipboard and a fax machine with a five-minute online intake.",
-      "tags": ["Workflow automation", "Forms", "HIPAA-aware"],
+      "tagline": "A growing collection of small, playful apps — built with love, one at a time.",
+      "tags": ["Mini apps", "Personal", "Playground"],
       "cover": "assets/images/placeholder-1.svg",
       "images": [
         "assets/images/placeholder-1.svg"
       ],
-      "description": "Riverside was printing ten-page intake packets for every new patient, then manually transcribing them into their records system. We shipped a tablet-friendly intake flow that saves the form directly into their existing software and flags incomplete submissions before the patient finishes checking in.",
-      "outcome": "New-patient intake dropped from 22 minutes to 4 minutes on average. Front-desk transcription time eliminated entirely.",
-      "stack": ["Next.js", "Tailwind", "Supabase", "TypeScript"],
-      "links": [
-        { "label": "Live site", "url": "#" },
-        { "label": "Source (private)", "url": "#" }
-      ],
+      "description": "A home for the little apps I build for Biba — quick, joyful things rather than client work. Each one is its own self-contained experiment, and the collection grows whenever inspiration strikes.",
+      "url": "bibas-playground/",
       "featured": true
     },
     {
