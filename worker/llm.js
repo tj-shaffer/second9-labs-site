@@ -21,7 +21,7 @@ const MAX_TOOL_LOOPS = 5;
 //   text         — final assistant text
 //   history      — full updated history including all model + tool turns
 //   toolResults  — list of { name, args, result } in call order
-export async function runChat({ apiKey, model = DEFAULT_MODEL, system, contents, tools, env, dispatch, preferences, executionCtx }) {
+export async function runChat({ apiKey, model = DEFAULT_MODEL, system, contents, tools, env, dispatch, preferences, executionCtx, userEmail = null }) {
   const url = `${GEMINI_BASE}/${encodeURIComponent(model)}:generateContent`;
   const declarations = tools && tools.length ? [{ function_declarations: tools }] : undefined;
 
@@ -76,7 +76,7 @@ export async function runChat({ apiKey, model = DEFAULT_MODEL, system, contents,
     for (const part of functionCallParts) {
       const { name, args } = part.functionCall;
       try {
-        const result = await dispatch(name, args || {}, env, { preferences, executionCtx });
+        const result = await dispatch(name, args || {}, env, { preferences, executionCtx, userEmail });
         toolResults.push({ name, args: args || {}, result });
         responseParts.push({ functionResponse: { name, response: result } });
       } catch (err) {

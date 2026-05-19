@@ -107,15 +107,15 @@ const SYSTEM_PROMPT_BASE =
   "## Tone for the `summary` field\n" +
   "Warm, specific, not gushy. One sentence. Refer to the dish by name. No emojis.";
 
-export async function generateRecipe({ query, preferences = {}, env }) {
+export async function generateRecipe({ query, preferences = {}, env, corpusSnapshot = [] }) {
   if (!query || typeof query !== 'string') {
     throw new Error('query is required');
   }
 
   const useGemini = env?.RECIPE_AUTHOR === 'gemini' || !env?.ANTHROPIC_API_KEY;
   const recipe = useGemini
-    ? await authorViaGemini({ query, preferences, env })
-    : await authorViaClaude({ query, preferences, env });
+    ? await authorViaGemini({ query, preferences, env, corpusSnapshot })
+    : await authorViaClaude({ query, preferences, env, corpusSnapshot });
 
   return {
     id: await stableId(query, recipe.title),
@@ -124,17 +124,21 @@ export async function generateRecipe({ query, preferences = {}, env }) {
   };
 }
 
-async function authorViaClaude({ query, preferences, env }) {
+async function authorViaClaude({ query, preferences, env, corpusSnapshot }) {
+  const systemBlocks = [
+    {
+      type: 'text',
+      text: SYSTEM_PROMPT_BASE,
+      cache_control: { type: 'ephemeral' }
+    }
+  ];
+  const corpusText = renderCorpus(corpusSnapshot);
+  if (corpusText) systemBlocks.push({ type: 'text', text: corpusText });
+
   const body = {
     model: ANTHROPIC_MODEL,
     max_tokens: 2000,
-    system: [
-      {
-        type: 'text',
-        text: SYSTEM_PROMPT_BASE,
-        cache_control: { type: 'ephemeral' }
-      }
-    ],
+    system: systemBlocks,
     tools: [RECIPE_TOOL],
     tool_choice: { type: 'tool', name: TOOL_NAME },
     output_config: { effort: 'medium' },
@@ -167,14 +171,17 @@ async function authorViaClaude({ query, preferences, env }) {
   return { ...toolBlock.input, authorModel: ANTHROPIC_MODEL };
 }
 
-async function authorViaGemini({ query, preferences, env }) {
+async function authorViaGemini({ query, preferences, env, corpusSnapshot }) {
   if (!env?.GEMINI_API_KEY) {
     throw new Error('GEMINI_API_KEY not set (required for Gemini fallback author)');
   }
 
+  const corpusText = renderCorpus(corpusSnapshot);
+  const systemText = corpusText ? `${SYSTEM_PROMPT_BASE}\n\n${corpusText}` : SYSTEM_PROMPT_BASE;
+
   const url = `${GEMINI_URL}/${encodeURIComponent(GEMINI_MODEL)}:generateContent`;
   const body = {
-    system_instruction: { parts: [{ text: SYSTEM_PROMPT_BASE }] },
+    system_instruction: { parts: [{ text: systemText }] },
     contents: [{ role: 'user', parts: [{ text: buildUserMessage(query, preferences) }] }],
     tools: [{ function_declarations: [geminiRecipeTool()] }],
     tool_config: {
@@ -283,4 +290,37 @@ async function stableId(query, title) {
     .map(b => b.toString(16).padStart(2, '0'))
     .join('')
     .slice(0, 16);
+}
+
+// Phase 8: render top-K corpus chunks the author should channel.
+// Kept compact — we send the ingredient + instruction JSON so the
+// author has full recipe context to lean on, but we cap to ~3 entries.
+function renderCorpus(corpusSnapshot) {
+  if (!Array.isArray(corpusSnapshot) || corpusSnapshot.length === 0) return '';
+  const lines = [
+    '## Sources the user trusts (their personal cookbook)',
+    'These are recipes the user has saved as canonical references. Channel their flavor, technique, and style. Adapt to the brief — do not copy verbatim.'
+  ];
+  for (const c of corpusSnapshot.slice(0, 3)) {
+    const tags = [c.cuisineTags, c.proteins].flat().filter(Boolean).slice(0, 6).join(', ');
+    lines.push('');
+    lines.push(`### From "${c.sourceTitle}": ${c.title}${tags ? ` (${tags})` : ''}`);
+    if (c.ingredientsJson) {
+      try {
+        const ing = JSON.parse(c.ingredientsJson);
+        if (Array.isArray(ing) && ing.length) {
+          lines.push('Ingredients: ' + ing.map(i => `${i.qty || ''} ${i.unit || ''} ${i.name}`.trim()).join('; '));
+        }
+      } catch { /* skip malformed */ }
+    }
+    if (c.instructionsJson) {
+      try {
+        const steps = JSON.parse(c.instructionsJson);
+        if (Array.isArray(steps) && steps.length) {
+          lines.push('Steps: ' + steps.join(' '));
+        }
+      } catch { /* skip */ }
+    }
+  }
+  return lines.join('\n');
 }

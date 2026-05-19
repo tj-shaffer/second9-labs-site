@@ -12,6 +12,7 @@ import { serveRecipeImage } from './image-gen.js';
 import { getCrossReference } from './cross-reference.js';
 import { recordMessage, recordApprovedRecipe, getMemorySnapshot } from './memory.js';
 import { getCachedRecipeById } from './recipe-cache.js';
+import { ingestPaste, ingestUrl, listSources, deleteSource } from './ingest.js';
 import {
   generateMagicToken,
   generateSessionId,
@@ -82,9 +83,75 @@ export default {
       return handleProfilePut(request, env);
     }
 
+    // ---- Phase 8: corpus (cookbook) routes ----
+    if (path === '/api/corpus' && request.method === 'GET') {
+      return handleCorpusList(request, env);
+    }
+    if (path === '/api/corpus/paste' && request.method === 'POST') {
+      return handleCorpusPaste(request, env);
+    }
+    if (path === '/api/corpus/url' && request.method === 'POST') {
+      return handleCorpusUrl(request, env);
+    }
+    if (path.startsWith('/api/corpus/') && request.method === 'DELETE') {
+      const sourceId = decodeURIComponent(path.slice('/api/corpus/'.length));
+      return handleCorpusDelete(request, env, sourceId);
+    }
+
     return json({ error: 'not_found', path }, 404);
   }
 };
+
+// ---------- corpus handlers (Phase 8) ----------
+
+async function handleCorpusList(request, env) {
+  const user = await currentUser(request, env);
+  if (!user) return json({ error: 'unauthenticated' }, 401);
+  const sources = await listSources(env, user.email);
+  return json({ sources });
+}
+
+async function handleCorpusPaste(request, env) {
+  const user = await currentUser(request, env);
+  if (!user) return json({ error: 'unauthenticated' }, 401);
+  let body;
+  try { body = await request.json(); }
+  catch { return json({ error: 'bad_request', message: 'Body must be valid JSON.' }, 400); }
+  const text = String(body?.text || '');
+  if (!text.trim()) return json({ error: 'bad_request', message: '`text` is required.' }, 400);
+  try {
+    const result = await ingestPaste({ email: user.email, text, env });
+    return json({ ok: true, ...result });
+  } catch (err) {
+    console.error('corpus paste failed:', err);
+    return json({ error: 'ingest_failed', message: String(err?.message || err) }, 500);
+  }
+}
+
+async function handleCorpusUrl(request, env) {
+  const user = await currentUser(request, env);
+  if (!user) return json({ error: 'unauthenticated' }, 401);
+  let body;
+  try { body = await request.json(); }
+  catch { return json({ error: 'bad_request', message: 'Body must be valid JSON.' }, 400); }
+  const url = String(body?.url || '').trim();
+  if (!url) return json({ error: 'bad_request', message: '`url` is required.' }, 400);
+  try {
+    const result = await ingestUrl({ email: user.email, url, env });
+    return json({ ok: true, ...result });
+  } catch (err) {
+    console.error('corpus url failed:', err);
+    return json({ error: 'ingest_failed', message: String(err?.message || err) }, 500);
+  }
+}
+
+async function handleCorpusDelete(request, env, sourceId) {
+  const user = await currentUser(request, env);
+  if (!user) return json({ error: 'unauthenticated' }, 401);
+  const ok = await deleteSource(env, user.email, sourceId);
+  if (!ok) return json({ error: 'not_found' }, 404);
+  return json({ ok: true });
+}
 
 // ---------- shared helper: resolve current authed user ----------
 async function currentUser(request, env) {
@@ -342,7 +409,8 @@ async function handleChat(request, env, ctx) {
       env,
       dispatch,
       preferences,
-      executionCtx: ctx
+      executionCtx: ctx,
+      userEmail: user?.email || null
     });
 
     // Phase 6: a single LLM-authored recipe per turn (no list).

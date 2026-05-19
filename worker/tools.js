@@ -11,6 +11,7 @@ import {
   putCachedRecipeById
 } from './recipe-cache.js';
 import { crossReference } from './cross-reference.js';
+import { getCorpusSnapshot } from './memory.js';
 
 export const TOOL_DECLARATIONS = [
   {
@@ -46,14 +47,20 @@ export async function dispatch(name, args, env, dispatchCtx = {}) {
     return { error: 'query is required' };
   }
 
-  const { preferences = {}, executionCtx } = dispatchCtx;
+  const { preferences = {}, executionCtx, userEmail = null } = dispatchCtx;
   const cacheKey = await buildCacheKey(query, preferences);
 
   let recipe = await getCachedRecipe(env, cacheKey);
   let fromCache = Boolean(recipe);
 
   if (!recipe) {
-    recipe = await generateRecipe({ query, preferences, env });
+    // Phase 8: pull the user's trusted-source corpus and pass it to
+    // the author so it can channel their cookbook. Authed only —
+    // anonymous users get an empty snapshot, which is a no-op.
+    const corpusSnapshot = userEmail
+      ? await getCorpusSnapshot(env, { email: userEmail, query }).catch(() => [])
+      : [];
+    recipe = await generateRecipe({ query, preferences, env, corpusSnapshot });
 
     const imageUrl = await generateRecipeImage({
       title: recipe.title,

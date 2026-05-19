@@ -1,16 +1,12 @@
-// Cloudflare Vectorize wrapper. Two indexes today:
+// Cloudflare Vectorize wrapper. Three indexes:
 //
-//   env.MEMORY_CONVERSATIONS — user-message embeddings
-//                              metadata: { email, ts, text, signal? }
-//   env.MEMORY_RECIPES       — approved-recipe embeddings (send-to-cart)
-//                              metadata: { email, ts, recipeId, title,
-//                                          cuisineTags, prepStyles, proteins,
-//                                          totalMin, complexity, signal }
+//   env.MEMORY_CONVERSATIONS — user-message embeddings (Phase 7)
+//   env.MEMORY_RECIPES       — approved-recipe embeddings (Phase 7)
+//   env.MEMORY_CORPUS        — personal cookbook chunks (Phase 8 —
+//                              written by worker/ingest.js)
 //
-// `corpus` (Phase 8) joins the family later as MEMORY_CORPUS.
-//
-// All queries are scoped per-user via metadata filter so users never
-// see another user's history.
+// All queries are scoped per-user via {email: {$eq: …}} metadata filter
+// so users never see another user's history or corpus.
 
 import { embed, EMBED_DIMS } from './embed.js';
 import { extractDna, embeddingText } from './recipe-dna.js';
@@ -131,4 +127,28 @@ function shape(settled) {
     score: m.score,
     ...m.metadata
   }));
+}
+
+// Retrieve top-K corpus chunks for the user keyed off a culinary brief.
+// Returned shape: array of { score, title, sourceTitle, cuisineTags,
+// proteins, ingredientsJson, instructionsJson, ... } — enough for the
+// author prompt to channel the source without re-fetching it.
+export async function getCorpusSnapshot(env, { email, query, topK = 3 }) {
+  if (!email || !query || !env?.MEMORY_CORPUS) return [];
+  let vector;
+  try { vector = await embed(query, env); }
+  catch (err) { console.warn('corpus query embed failed:', err?.message || err); return []; }
+  if (!vector) return [];
+
+  try {
+    const result = await env.MEMORY_CORPUS.query(vector, {
+      topK,
+      filter: { email: { $eq: email } },
+      returnMetadata: 'all'
+    });
+    return (result?.matches || []).map(m => ({ score: m.score, ...m.metadata }));
+  } catch (err) {
+    console.warn('corpus query failed:', err?.message || err);
+    return [];
+  }
 }

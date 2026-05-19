@@ -57,6 +57,11 @@
 			"binding": "MEMORY_RECIPES",
 			"index_name": "biba-memory-recipes",
 			"remote": true
+		},
+		{
+			"binding": "MEMORY_CORPUS",
+			"index_name": "biba-memory-corpus",
+			"remote": true
 		}
 	]
 }
