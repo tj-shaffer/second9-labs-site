@@ -1,0 +1,24 @@
+# Local-dev secrets template for `wrangler dev`. Copy to `.dev.vars`
+# (gitignored) and fill in real values. Production uses `wrangler secret put`.
+
+# --- Phase 3 + 4 (v1) ---
+GEMINI_API_KEY=               # Gemini 2.5 Flash for conversational drive + Imagen 3 image gen
+SPOONACULAR_API_KEY=          # Phase 6: demoted to background cross-reference
+
+# --- Phase 5 (magic-link auth) ---
+RESEND_API_KEY=               # Resend transactional email for magic-link sign-in
+SESSION_SECRET=               # Random 32+ bytes, hex or base64; signs session cookies
+EMAIL_FROM=                   # e.g. "Biba's Kitchen <hi@your-domain.com>"
+
+# --- Phase 6 (Kitchen OS — recipe brain swap) ---
+ANTHROPIC_API_KEY=            # Claude Opus 4.7 — primary recipe author
+# RECIPE_AUTHOR=gemini        # Uncomment to force Gemini 2.5 Pro as the author
+                              # (reuses GEMINI_API_KEY; useful if Anthropic
+                              # credits are unavailable or you want cheaper).
+EDAMAM_APP_ID=                # Edamam Recipe Search API — cross-reference
+EDAMAM_APP_KEY=               # Edamam Recipe Search API — cross-reference
+RAPID_API_KEY=                # Tasty via RapidAPI — cross-reference
+
+# --- Future (Phase 10 — when Instacart IDP approval lands) ---
+# INSTACART_API_KEY=          # Auto-upgrades the Instacart provider from search-URL to real cart
+

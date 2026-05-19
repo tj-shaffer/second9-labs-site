@@ -1,98 +1,90 @@
-// Tool schemas + dispatcher for Gemini function-calling.
-// Tools talk to Spoonacular; the LLM calls them via function declarations.
+// Tool schemas + dispatcher for Gemini's function-calling loop.
+// Phase 6: Gemini drives conversation, Claude Opus 4.7 authors the recipe.
+// Spoonacular has been demoted to a background cross-reference only.
 
-import { searchRecipes, getRecipeDetails } from './recipes.js';
+import { generateRecipe } from './recipe-author.js';
+import { generateRecipeImage } from './image-gen.js';
+import {
+  buildCacheKey,
+  getCachedRecipe,
+  putCachedRecipe,
+  putCachedRecipeById
+} from './recipe-cache.js';
+import { crossReference } from './cross-reference.js';
 
-// Gemini function-declaration format (OpenAPI 3.0 subset, lowercase types).
 export const TOOL_DECLARATIONS = [
   {
-    name: 'search_recipes',
+    name: 'generate_recipe',
     description:
-      "Search a real recipe database for dishes matching the user's request. " +
-      'Use this whenever the user asks for ideas, has finished the guided wizard, ' +
-      'or asks for alternatives. Never invent recipes — always call this.',
+      "Generate one complete recipe matching the user's request. " +
+      'Always call this when the user expresses what they want to cook ' +
+      '(free-text, guided-wizard answers, or "make me something"). ' +
+      'You are not searching a catalog — a separate expert chef authors the recipe.',
     parameters: {
       type: 'object',
       properties: {
         query: {
           type: 'string',
           description:
-            'Natural-language search query, e.g. "creamy mushroom pasta", ' +
-            '"quick weeknight chicken", "no-cook summer dinner". Keep it short and specific.'
-        },
-        diet: {
-          type: 'array',
-          items: { type: 'string' },
-          description:
-            'Dietary tags the recipe must satisfy. Allowed values: ' +
-            '"vegetarian", "vegan", "gluten free", "ketogenic", "paleo", "pescetarian", "primal", "whole30", "lacto vegetarian", "ovo vegetarian", "low FODMAP".'
-        },
-        intolerances: {
-          type: 'array',
-          items: { type: 'string' },
-          description:
-            'Ingredient categories to exclude entirely. Allowed values: ' +
-            '"dairy", "egg", "gluten", "grain", "peanut", "seafood", "sesame", "shellfish", "soy", "sulfite", "tree nut", "wheat".'
-        },
-        maxReadyTime: {
-          type: 'integer',
-          description: 'Maximum total time in minutes (prep + cook).'
-        },
-        cuisine: {
-          type: 'string',
-          description: 'Optional cuisine filter, e.g. "italian", "mexican", "thai", "japanese".'
-        },
-        number: {
-          type: 'integer',
-          description: 'How many recipes to return. Default 3. Maximum 5.'
+            "The user's request distilled to a short culinary brief, e.g. " +
+            '"Sichuan chicken with cumin oil", "cozy weeknight pasta", ' +
+            '"vegetarian sheet-pan dinner". Keep it 4–12 words.'
         }
       },
       required: ['query']
     }
-  },
-  {
-    name: 'get_recipe_details',
-    description:
-      'Fetch the full ingredient list and step-by-step instructions for one recipe. ' +
-      'Call this once the user has chosen a specific recipe from a previous search.',
-    parameters: {
-      type: 'object',
-      properties: {
-        id: {
-          type: 'integer',
-          description: 'The Spoonacular recipe ID, as returned by search_recipes.'
-        }
-      },
-      required: ['id']
-    }
   }
 ];
 
-// Dispatch a tool call by name. Returns the raw JSON object to send back to Gemini
-// as a functionResponse. Caller should JSON-stringify if needed.
-export async function dispatch(name, args, env) {
-  if (name === 'search_recipes') {
-    const recipes = await searchRecipes(env.SPOONACULAR_API_KEY, {
-      query: args.query,
-      diet: args.diet,
-      intolerances: args.intolerances,
-      maxReadyTime: args.maxReadyTime,
-      cuisine: args.cuisine,
-      number: clamp(args.number ?? 3, 1, 5)
+export async function dispatch(name, args, env, dispatchCtx = {}) {
+  if (name !== 'generate_recipe') {
+    return { error: `Unknown tool: ${name}` };
+  }
+
+  const query = String(args?.query || '').trim();
+  if (!query) {
+    return { error: 'query is required' };
+  }
+
+  const { preferences = {}, executionCtx } = dispatchCtx;
+  const cacheKey = await buildCacheKey(query, preferences);
+
+  let recipe = await getCachedRecipe(env, cacheKey);
+  let fromCache = Boolean(recipe);
+
+  if (!recipe) {
+    recipe = await generateRecipe({ query, preferences, env });
+
+    const imageUrl = await generateRecipeImage({
+      title: recipe.title,
+      prompt: recipe.image_prompt,
+      env
     });
-    return { recipes };
+    recipe.imageUrl = imageUrl;
+    recipe.cachedAt = Date.now();
+
+    await Promise.all([
+      putCachedRecipe(env, cacheKey, recipe),
+      putCachedRecipeById(env, recipe)
+    ]);
   }
 
-  if (name === 'get_recipe_details') {
-    const recipe = await getRecipeDetails(env.SPOONACULAR_API_KEY, args.id);
-    return { recipe };
+  if (executionCtx?.waitUntil) {
+    executionCtx.waitUntil(crossReference(recipe, env));
   }
 
-  return { error: `Unknown tool: ${name}` };
-}
-
-function clamp(n, min, max) {
-  n = Math.floor(Number(n));
-  if (!Number.isFinite(n)) return min;
-  return Math.max(min, Math.min(max, n));
+  return {
+    recipe: {
+      id: recipe.id,
+      title: recipe.title,
+      summary: recipe.summary,
+      time: recipe.time,
+      servings: recipe.servings,
+      ingredients: recipe.ingredients,
+      instructions: recipe.instructions,
+      cuisine_tags: recipe.cuisine_tags,
+      imageUrl: recipe.imageUrl || null
+    },
+    fromCache
+  };
 }

@@ -22,5 +22,15 @@
       "binding": "BIBA_USERS",
       "id": "local-dev-placeholder-replace-before-deploy"
     }
+  ],
+  // R2 bucket for Imagen-3-generated recipe photos (Phase 6).
+  // Cache keyed by sha256(title|image_prompt); first generation only,
+  // re-served from R2 forever after. Provision once with:
+  //   npx wrangler r2 bucket create biba-recipe-images
+  "r2_buckets": [
+    {
+      "binding": "BIBA_RECIPE_IMAGES",
+      "bucket_name": "biba-recipe-images"
+    }
   ]
 }

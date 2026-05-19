@@ -4,9 +4,17 @@
 //   magic:<token>     -> { email, exp } — 10-min TTL, single-use
 //   session:<sid>     -> { email, exp } — 30-day TTL
 //   user:<email>      -> { email, createdAt, preferences } — no TTL
-//   history:<email>   -> Array<{ recipeId, title, reaction, at }> — no TTL
+//   history:<email>   -> Array<{ recipeId, title, signal?, at }> — no TTL
+//   recipe:cache:<sha>  -> recipe JSON — 30-day TTL (Phase 6)
+//   recipe:byid:<id>    -> recipe JSON — 30-day TTL (Phase 6)
+//   recipe:xref:<id>    -> cross-reference aggregate JSON — 30-day TTL (Phase 6)
 //
 // All values are JSON.
+//
+// Phase 6 retired the explicit-reaction model (loved/liked/skipped).
+// `signal` now holds an implicit signal — 'sent_to_cart' for now;
+// 'asked_alternatives' may join later. Entries without a signal are
+// neutral history.
 
 const MAGIC_TTL_S = 10 * 60;             // 10 minutes
 const SESSION_TTL_S = 30 * 24 * 60 * 60; // 30 days
@@ -101,13 +109,15 @@ export async function getHistory(env, email) {
   } catch { return []; }
 }
 
-// Append a reaction; keep the list capped to HISTORY_MAX entries (most recent first).
+// Append a history entry; keep the list capped to HISTORY_MAX entries
+// (most recent first). `entry.signal` is optional in Phase 6
+// ('sent_to_cart' | 'asked_alternatives' | undefined for neutral views).
 export async function appendHistory(env, email, entry) {
   const list = await getHistory(env, email);
   list.unshift({
     recipeId: entry.recipeId,
     title: entry.title,
-    reaction: entry.reaction, // 'loved' | 'liked' | 'skipped'
+    signal: entry.signal || null,
     at: Date.now()
   });
   const trimmed = list.slice(0, HISTORY_MAX);

@@ -4,7 +4,7 @@
   "private": true,
   "description": "Second 9 Labs marketing site and Biba's Playground mini-apps. Static assets served by Cloudflare Workers.",
   "scripts": {
-    "dev": "wrangler dev",
+    "dev": "wrangler dev --port 8787 --persist-to /tmp/wrangler-state-bibas",
     "deploy": "wrangler deploy"
   },
   "devDependencies": {

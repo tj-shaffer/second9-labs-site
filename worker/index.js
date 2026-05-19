@@ -1,15 +1,15 @@
 // Cloudflare Worker entrypoint for Second 9 Labs site.
 //
-// Static assets are served from the repo root via the assets binding.
-// This Worker only runs for paths that aren't matched by an asset
-// (default Workers Assets behavior when run_worker_first is unset).
-//
-// Phase 3 wires /api/recipes/chat to Gemini + Spoonacular.
-// Phase 4 will wire /api/cart/build to Instacart's public search URL.
+// Phase 6 (Kitchen OS): Gemini drives conversation, Claude Opus 4.7
+// authors recipes via tool-use, Imagen 3 generates the photo (cached
+// in R2), and Spoonacular + Edamam + TheMealDB + Tasty cross-reference
+// the LLM's output in the background via ctx.waitUntil.
 
 import { runChat, buildSystemPrompt } from './llm.js';
 import { TOOL_DECLARATIONS, dispatch } from './tools.js';
 import { listProviders, buildCart } from './cart/index.js';
+import { serveRecipeImage } from './image-gen.js';
+import { getCrossReference } from './cross-reference.js';
 import {
   generateMagicToken,
   generateSessionId,
@@ -38,7 +38,18 @@ export default {
     const path = url.pathname;
 
     if (path === '/api/recipes/chat' && request.method === 'POST') {
-      return handleChat(request, env);
+      return handleChat(request, env, ctx);
+    }
+
+    if (path.startsWith('/api/recipes/xref/') && request.method === 'GET') {
+      const id = decodeURIComponent(path.slice('/api/recipes/xref/'.length));
+      const xref = await getCrossReference(env, id);
+      return json(xref || { pending: true });
+    }
+
+    if (path.startsWith('/api/recipe-image/') && request.method === 'GET') {
+      const key = decodeURIComponent(path.slice('/api/recipe-image/'.length));
+      return serveRecipeImage(env, key);
     }
 
     if (path === '/api/cart/providers' && request.method === 'GET') {
@@ -69,36 +80,9 @@ export default {
       return handleProfilePut(request, env);
     }
 
-    if (path === '/api/recipes/feedback' && request.method === 'POST') {
-      return handleRecipeFeedback(request, env);
-    }
-
     return json({ error: 'not_found', path }, 404);
   }
 };
-
-async function handleRecipeFeedback(request, env) {
-  const user = await currentUser(request, env);
-  if (!user) return json({ error: 'unauthenticated' }, 401);
-
-  let body;
-  try { body = await request.json(); }
-  catch { return json({ error: 'bad_request', message: 'Body must be valid JSON.' }, 400); }
-
-  const recipeId = body?.recipeId;
-  const title = body?.title;
-  const reaction = body?.reaction;
-  const allowedReactions = ['loved', 'liked', 'skipped'];
-  if (recipeId == null || !title || !allowedReactions.includes(reaction)) {
-    return json({
-      error: 'bad_request',
-      message: 'Body must include recipeId, title, and reaction (loved|liked|skipped).'
-    }, 400);
-  }
-
-  const history = await appendHistory(env, user.email, { recipeId, title, reaction });
-  return json({ ok: true, historyCount: history.length });
-}
 
 // ---------- shared helper: resolve current authed user ----------
 async function currentUser(request, env) {
@@ -247,14 +231,27 @@ async function handleCartBuild(request, env) {
   try { body = await request.json(); }
   catch { return json({ error: 'bad_request', message: 'Body must be valid JSON.' }, 400); }
 
-  const { ingredients = [], provider = 'instacart' } = body || {};
+  const { ingredients = [], provider = 'instacart', recipeId, title } = body || {};
   if (!Array.isArray(ingredients) || ingredients.length === 0) {
     return json({ error: 'bad_request', message: 'ingredients must be a non-empty array.' }, 400);
   }
 
   try {
     const result = await buildCart(provider, ingredients, env);
-    // buildCart already includes the actually-used provider id in result.
+
+    // Phase 6 implicit-signal: send-to-cart is the positive signal that
+    // replaced the retired reaction buttons. Best-effort, never blocks.
+    if (recipeId && title) {
+      const user = await currentUser(request, env).catch(() => null);
+      if (user) {
+        await appendHistory(env, user.email, {
+          recipeId,
+          title,
+          signal: 'sent_to_cart'
+        }).catch(err => console.warn('history append failed:', err));
+      }
+    }
+
     return json(result);
   } catch (err) {
     console.error('cart build failed:', err);
@@ -262,13 +259,14 @@ async function handleCartBuild(request, env) {
   }
 }
 
-async function handleChat(request, env) {
+async function handleChat(request, env, ctx) {
   // Validate environment early so misconfiguration is obvious.
+  // Gemini is always required (conversational drive + Imagen 3).
+  // The recipe author can be either Claude (default) or Gemini Pro
+  // (when RECIPE_AUTHOR=gemini). recipe-author.js raises if neither
+  // backend is configured, so we only hard-fail on the always-needed key.
   if (!env.GEMINI_API_KEY) {
     return json({ error: 'misconfigured', message: 'GEMINI_API_KEY not set on the Worker.' }, 500);
-  }
-  if (!env.SPOONACULAR_API_KEY) {
-    return json({ error: 'misconfigured', message: 'SPOONACULAR_API_KEY not set on the Worker.' }, 500);
   }
 
   let body;
@@ -315,22 +313,21 @@ async function handleChat(request, env) {
       contents,
       tools: TOOL_DECLARATIONS,
       env,
-      dispatch
+      dispatch,
+      preferences,
+      executionCtx: ctx
     });
 
-    // Surface the latest tool outputs so the frontend can render cards / approval views
-    // without having to make any of its own API calls.
-    const lastSearch = toolResults
-      .filter(t => t.name === 'search_recipes' && t.result?.recipes)
-      .pop();
-    const lastDetail = toolResults
-      .filter(t => t.name === 'get_recipe_details' && t.result?.recipe)
+    // Phase 6: a single LLM-authored recipe per turn (no list).
+    const lastRecipe = toolResults
+      .filter(t => t.name === 'generate_recipe' && t.result?.recipe)
       .pop();
 
     return json({
       message: { role: 'assistant', text },
-      recipes: lastSearch?.result?.recipes || null,
-      recipeDetail: lastDetail?.result?.recipe || null
+      recipe: lastRecipe?.result?.recipe || null,
+      fromCache: lastRecipe?.result?.fromCache || false,
+      xrefPending: Boolean(lastRecipe?.result?.recipe && !lastRecipe.result.fromCache)
     });
   } catch (err) {
     console.error('chat error:', err);

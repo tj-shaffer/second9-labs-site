@@ -1,7 +1,9 @@
 // ============================================================
 // Biba's Playground — Recipes mini-app
-// Phase 3: real chat backed by Gemini + Spoonacular via /api/recipes/chat.
-// Phase 4 wires the "Send to Instacart" button to /api/cart/build.
+// Phase 6 (Kitchen OS): Gemini drives chat, Claude Opus 4.7 authors
+// every recipe, Imagen 3 generates the photo, four DBs cross-reference
+// the result in the background. One recipe per turn (no list).
+// Explicit reactions retired — implicit signals (send-to-cart) now.
 // ============================================================
 
 (function () {
@@ -23,7 +25,6 @@
     cartProvider: 'instacart'
   };
 
-  // Fallback provider catalog if /api/cart/providers can't be reached.
   const FALLBACK_PROVIDERS = {
     instacart: { id: 'instacart', name: 'Instacart', mode: 'search' },
     ubereats: { id: 'ubereats', name: 'Uber Eats', mode: 'search' }
@@ -46,7 +47,6 @@
     }
   }
 
-  // ---------- guided-wizard config ----------
   const GUIDED = {
     mood:   { prompt: "How are you feeling tonight?", chips: ['Cozy', 'Energized', 'Light & fresh', 'A little fancy'] },
     time:   { prompt: "How much time have you got?", chips: ['15 min', '30 min', '45 min', 'No rush'] },
@@ -54,21 +54,17 @@
   };
 
   // ---------- state ----------
-  // Each message: { role: 'user'|'assistant', text, html,
-  //                 recipes?, recipeDetail?, typing?, hidden?, id? }
   let state = {
-    view: 'welcome',     // 'welcome' | 'chat'
-    path: null,          // 'free' | 'guided'
+    view: 'welcome',
+    path: null,
     messages: [],
     guided: { step: null, answers: {} },
-    lastRecipes: null,   // most recent search result
-    recipeDetailsById: {}, // recipeId -> full detail (for cart hand-off)
-    cartProviders: { ...FALLBACK_PROVIDERS }, // refreshed from /api/cart/providers at boot
+    recipesById: {},  // id -> full authored recipe (for cart hand-off + xref poll)
+    cartProviders: { ...FALLBACK_PROVIDERS },
     preferences: loadPreferences(),
-    auth: { email: null, historyCount: 0 } // populated by checkAuth()
+    auth: { email: null, historyCount: 0 }
   };
 
-  // Fire-and-forget refresh of the provider catalog.
   fetch('/api/cart/providers').then(r => r.ok ? r.json() : null).then(data => {
     if (data && Array.isArray(data.providers)) {
       const next = {};
@@ -77,7 +73,6 @@
     }
   }).catch(() => { /* keep fallback */ });
 
-  // Fire-and-forget auth check; updates state + chrome when it resolves.
   async function checkAuth() {
     try {
       const res = await fetch('/api/profile');
@@ -89,7 +84,6 @@
       if (!res.ok) return;
       const data = await res.json();
       state.auth = { email: data.email, historyCount: data.historyCount || 0 };
-      // Server preferences win over localStorage when authed; keep localStorage as fallback only.
       if (data.preferences && typeof data.preferences === 'object') {
         state.preferences = { ...DEFAULT_PREFS, ...state.preferences, ...data.preferences };
       }
@@ -100,7 +94,6 @@
   }
   checkAuth();
 
-  // ---------- render ----------
   function render() {
     if (state.view === 'welcome') return renderWelcome();
     renderChat();
@@ -124,10 +117,7 @@
     `;
   }
 
-  function renderAuthChrome() {
-    // Called after the async /api/profile fetch resolves. Cheap re-render.
-    render();
-  }
+  function renderAuthChrome() { render(); }
 
   function renderWelcome() {
     root.innerHTML = `
@@ -135,13 +125,13 @@
       <section class="welcome">
         <p class="eyebrow">Biba's Playground</p>
         <h1>What's <em>for dinner?</em></h1>
-        <p class="lede">Tell me what you're craving, or let me ask a couple of questions and we'll figure it out together. I'll pull together a real recipe and (eventually) drop the groceries into your Instacart cart.</p>
+        <p class="lede">Tell me what you're craving, or let me ask a couple of questions and we'll figure it out together. An expert AI chef writes the recipe, I generate the photo, and I (eventually) drop the groceries into your Instacart cart.</p>
 
         <div class="doors">
           <button class="door" data-path="free">
             <span class="door-tag">Free chat</span>
             <h3>Tell me what you're craving</h3>
-            <p>Just type — "something cozy", "easy weeknight", "fish but not fishy". I'll riff.</p>
+            <p>Just type — "something cozy", "Sichuan chicken with cumin oil", "no-cook summer dinner". I'll author one for you.</p>
           </button>
           <button class="door" data-path="guided">
             <span class="door-tag">Three questions</span>
@@ -187,10 +177,7 @@
     if (!signoutBtn) return;
     signoutBtn.addEventListener('click', async () => {
       signoutBtn.disabled = true;
-      try {
-        await fetch('/api/auth/logout', { method: 'POST' });
-      } catch { /* fall through */ }
-      // Hard reload so all client state resets cleanly.
+      try { await fetch('/api/auth/logout', { method: 'POST' }); } catch { /* fall through */ }
       location.reload();
     });
   }
@@ -208,7 +195,6 @@
     });
   }
 
-  // ---------- handlers ----------
   function bindChatHandlers() {
     document.querySelector('.reset').addEventListener('click', resetAll);
 
@@ -238,14 +224,9 @@
         handleChip(chip.dataset.chip, chip.dataset.context);
         return;
       }
-      const pick = e.target.closest('[data-pick]');
-      if (pick) {
-        pickRecipe(pick.dataset.pick, pick.dataset.pickTitle || '');
-        return;
-      }
-      const more = e.target.closest('[data-more]');
-      if (more) {
-        handleUserText('Show me a few different ideas, please.');
+      const alt = e.target.closest('[data-alternatives]');
+      if (alt) {
+        handleUserText('Show me a different idea, please.');
         return;
       }
       const send = e.target.closest('[data-send-cart]');
@@ -263,40 +244,7 @@
           handleUserText(lastUserMsg.text);
         }
       }
-
-      const reaction = e.target.closest('.reaction[data-reaction]');
-      if (reaction && !reaction.disabled) {
-        recordReaction(reaction);
-      }
     });
-  }
-
-  // ---------- reactions ----------
-  async function recordReaction(buttonEl) {
-    const wrap = buttonEl.closest('.reactions');
-    if (!wrap) return;
-    const recipeId = wrap.dataset.recipeId;
-    const title = wrap.dataset.recipeTitle;
-    const reaction = buttonEl.dataset.reaction;
-    if (!recipeId || !title || !reaction) return;
-
-    // Disable all reaction buttons in this group + highlight the chosen one.
-    wrap.querySelectorAll('.reaction').forEach(b => { b.disabled = true; });
-    buttonEl.classList.add('chosen');
-
-    try {
-      const res = await fetch('/api/recipes/feedback', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ recipeId, title, reaction })
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      // Replace the buttons with a quiet confirmation.
-      wrap.innerHTML = `<span class="reactions-label">✓ Saved · I'll remember.</span>`;
-    } catch (err) {
-      console.warn('reaction save failed:', err);
-      wrap.innerHTML = `<span class="reactions-label" style="color:#D42A1F;">Couldn't save that reaction — try again later.</span>`;
-    }
   }
 
   function autoGrow(el) {
@@ -305,7 +253,6 @@
     el.style.height = Math.min(el.scrollHeight, 128) + 'px';
   }
 
-  // ---------- conversation flow ----------
   function startPath(path) {
     state.view = 'chat';
     state.path = path;
@@ -313,11 +260,11 @@
     state.guided = { step: null, answers: {} };
 
     if (path === 'free') {
-      const greeting = "Hi! Tell me what you're in the mood for — vibe, time, ingredients on hand, anything goes. I'll suggest a couple of options.";
+      const greeting = "Hi! Tell me what you're in the mood for — vibe, time, a specific dish, anything goes. I'll write you one real recipe and generate a photo of it.";
       addAssistantHtml(`<p>${escapeHtml(greeting)}</p>`, greeting);
     } else {
       state.guided.step = 'mood';
-      const intro = "Lovely. Three quick questions and I'll put a couple of ideas in front of you.";
+      const intro = "Lovely. Three quick questions and I'll author something for you.";
       addAssistantHtml(`<p>${escapeHtml(intro)}</p>` + askGuided('mood'), intro);
     }
     render();
@@ -333,9 +280,7 @@
 
   function handleChip(value, context) {
     addUser(value);
-    if (context === 'guided') {
-      handleGuidedAnswer(value);
-    }
+    if (context === 'guided') handleGuidedAnswer(value);
   }
 
   function handleGuidedAnswer(value) {
@@ -352,14 +297,12 @@
       addAssistantHtml(`<p>${escapeHtml(q.prompt)}</p>` + askGuided(next), q.prompt);
     } else {
       state.guided.step = null;
-      // Synthesize a single coherent user statement from the wizard answers,
-      // sent (hidden from the UI) as the prompt to the LLM.
       const a = state.guided.answers;
       const synthesized =
         `I'm feeling ${(a.mood || 'open').toLowerCase()}, ` +
         `I've got about ${(a.time || 'a moderate amount of time').toLowerCase()}, ` +
         `and I want ${(a.effort || 'a normal amount').toLowerCase()} of cooking energy. ` +
-        `Suggest a few options.`;
+        `Author one recipe for me.`;
       addUser(synthesized, /*hidden=*/ true);
       callChatAndRender();
     }
@@ -373,26 +316,21 @@
     return `<div class="chips">${chipsHtml}</div>`;
   }
 
-  function pickRecipe(id, title) {
-    handleUserText(`Let's go with ${title || 'that one'}. Can you pull up the full recipe?`);
-  }
-
   // ---------- cart hand-off ----------
   async function sendToCart(buttonEl) {
     const recipeId = buttonEl.dataset.sendCart;
     const providerId = buttonEl.dataset.provider || state.preferences.cartProvider || 'instacart';
 
-    const detail = state.recipeDetailsById[String(recipeId)];
-    const ingredients = detail?.ingredients;
+    const recipe = state.recipesById[String(recipeId)];
+    const ingredients = recipe?.ingredients;
     if (!ingredients || ingredients.length === 0) {
       addAssistantHtml(
-        `<p>I lost track of this recipe's ingredients — try picking it again from the list above.</p>`,
+        `<p>I lost track of this recipe's ingredients — try asking for a new one.</p>`,
         "I lost track of this recipe's ingredients."
       );
       return;
     }
 
-    // Disable + show loading state on the button.
     const originalText = buttonEl.textContent;
     buttonEl.disabled = true;
     buttonEl.textContent = 'Opening…';
@@ -403,7 +341,9 @@
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           ingredients: ingredients.map(i => ({ name: i.name, qty: i.qty, unit: i.unit })),
-          provider: providerId
+          provider: providerId,
+          recipeId,
+          title: recipe.title
         })
       });
       if (!res.ok) {
@@ -413,10 +353,8 @@
       const data = await res.json();
       if (!data.url) throw new Error('No URL returned from /api/cart/build.');
 
-      // Open in a new tab. window.open with _blank is allowed inside a user-initiated handler.
       const opened = window.open(data.url, '_blank', 'noopener');
       if (!opened) {
-        // Popup blocked — show the link inline so the user can open it manually.
         addAssistantHtml(
           `<p>Your browser blocked the new tab. Open it manually: ` +
           `<a href="${escapeHtml(data.url)}" target="_blank" rel="noopener">${escapeHtml(state.cartProviders[providerId]?.name || 'Open cart')} →</a></p>`,
@@ -445,7 +383,8 @@
         .filter(m => !m.typing && m.text)
         .map(m => ({ role: m.role, text: m.text }));
 
-      const knownRecipes = (state.lastRecipes || []).map(r => ({ id: r.id, title: r.title }));
+      const knownRecipes = Object.values(state.recipesById)
+        .map(r => ({ id: r.id, title: r.title }));
 
       const res = await fetch('/api/recipes/chat', {
         method: 'POST',
@@ -475,97 +414,94 @@
     removeMessage(typingId);
 
     const text = json.message?.text || '';
-    const recipes = Array.isArray(json.recipes) ? json.recipes : null;
-    const recipeDetail = json.recipeDetail || null;
+    const recipe = json.recipe;
 
-    if (recipeDetail) {
-      // Stash detail so the Send-to-cart click handler can look up ingredients by ID later,
-      // even if the user scrolls back through older approval cards.
-      if (recipeDetail.id != null) {
-        state.recipeDetailsById[String(recipeDetail.id)] = recipeDetail;
-      }
-      const html = (text ? `<p>${escapeHtml(text)}</p>` : '') + renderApproval(recipeDetail);
-      addAssistantHtml(html, text || `Here's the recipe for ${recipeDetail.title}.`, { recipeDetail });
-    } else if (recipes && recipes.length) {
-      state.lastRecipes = recipes;
-      const html = (text ? `<p>${escapeHtml(text)}</p>` : '') + renderRecipeOptions(recipes);
-      addAssistantHtml(html, text, { recipes });
+    if (recipe?.id) {
+      state.recipesById[String(recipe.id)] = recipe;
+      const html = (text ? `<p>${escapeHtml(text)}</p>` : '') + renderRecipeCard(recipe, { xrefPending: json.xrefPending });
+      addAssistantHtml(html, text || `Here's a recipe for ${recipe.title}.`, { recipe });
+
+      if (json.xrefPending) schedulePollXref(recipe.id);
     } else {
       addAssistantHtml(`<p>${escapeHtml(text || '(empty response)')}</p>`, text);
     }
   }
 
-  // ---------- rendering helpers ----------
-  function renderRecipeOptions(recipes) {
-    return recipes.map(r => `
-      <div class="recipe-card">
-        <div class="recipe-img" aria-hidden="true">
-          ${r.image
-            ? `<img src="${escapeHtml(r.image)}" alt="" loading="lazy" />`
-            : escapeRecipeEmoji(r)}
-        </div>
-        <div>
-          <h4>${escapeHtml(r.title)}</h4>
-          <div class="meta">
-            ${r.readyInMinutes ? escapeHtml(r.readyInMinutes + ' min') : ''}
-            ${r.servings ? ' · ' + escapeHtml('serves ' + r.servings) : ''}
-          </div>
-          ${r.summary ? `<p>${escapeHtml(trimSummary(r.summary))}</p>` : ''}
-          <div class="actions">
-            <button class="chip" type="button" data-pick="${escapeHtml(r.id)}" data-pick-title="${escapeHtml(r.title)}">Let's do this one →</button>
-          </div>
-        </div>
-      </div>
-    `).join('') + `
-      <div class="chips">
-        <button class="chip" type="button" data-more="1">Show me something else</button>
-      </div>
-    `;
+  // ---------- xref polling ----------
+  function schedulePollXref(recipeId, attempt = 0) {
+    if (attempt > 4) return;
+    setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/recipes/xref/${encodeURIComponent(recipeId)}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data?.pending) {
+          schedulePollXref(recipeId, attempt + 1);
+          return;
+        }
+        if (data?.matchCount != null) {
+          const node = document.querySelector(`[data-xref-for="${CSS.escape(String(recipeId))}"]`);
+          if (node) {
+            node.textContent = data.matchCount > 0
+              ? `Cross-referenced against ~${data.matchCount} similar recipes across Spoonacular, Edamam, TheMealDB, and Tasty.`
+              : `No close matches in public recipe DBs — this is a fresh take.`;
+          }
+        }
+      } catch { /* silently give up */ }
+    }, attempt === 0 ? 3000 : 2500);
   }
 
-  function renderApproval(r) {
+  // ---------- rendering ----------
+  function renderRecipeCard(r, opts = {}) {
     const ing = (r.ingredients || []).map(i => `
-      <li>${formatQtyHtml(i)}${escapeHtml(i.name || i.original || '')}</li>
+      <li>${formatQtyHtml(i)}${escapeHtml(i.name || '')}</li>
     `).join('');
     const steps = (r.instructions || []).map(s => `<li>${escapeHtml(s)}</li>`).join('');
 
-    // Resolve the user's preferred provider for the Send button label + mode note.
     const providerId = state.preferences.cartProvider || 'instacart';
     const provider = state.cartProviders[providerId] || FALLBACK_PROVIDERS[providerId] || FALLBACK_PROVIDERS.instacart;
     const modeNote = MODE_NOTES[provider.mode] || '';
 
-    const isAuthed = !!state.auth.email;
-    const reactionTitle = isAuthed
-      ? "Help me learn what you love"
-      : "Sign in to record your reaction";
+    const totalMin = r.time?.total_min || 0;
+    const servings = r.servings || 0;
+
+    const imageHtml = r.imageUrl
+      ? `<div class="approval-img"><img src="${escapeHtml(r.imageUrl)}" alt="" loading="lazy" /></div>`
+      : '';
+
+    const xrefInitial = opts.xrefPending
+      ? 'Cross-referencing against Spoonacular, Edamam, TheMealDB, and Tasty…'
+      : '';
 
     return `
       <div class="approval">
-        <h4>${escapeHtml(r.title)}</h4>
-        ${r.image ? `<div class="approval-img"><img src="${escapeHtml(r.image)}" alt="" loading="lazy" /></div>` : ''}
-        <div class="meta" style="font-family:'JetBrains Mono',monospace; font-size:0.7rem; color:#1F4E8C; text-transform:uppercase; letter-spacing:0.06em; margin:0.5rem 0;">
-          ${r.readyInMinutes ? escapeHtml(r.readyInMinutes + ' min') : ''}
-          ${r.servings ? ' · ' + escapeHtml('serves ' + r.servings) : ''}
+        <div class="approval-head">
+          <h4>${escapeHtml(r.title)}</h4>
+          <span class="ai-badge" title="Authored by an AI chef, photo generated by Imagen 3">AI-generated</span>
+        </div>
+        ${imageHtml}
+        <div class="meta">
+          ${totalMin ? escapeHtml(totalMin + ' min') : ''}
+          ${servings ? ' · ' + escapeHtml('serves ' + servings) : ''}
+          ${Array.isArray(r.cuisine_tags) && r.cuisine_tags.length ? ' · ' + r.cuisine_tags.map(t => escapeHtml(t)).join(' · ') : ''}
         </div>
 
-        <h5 style="font-family:'Fraunces',serif; margin:1rem 0 0.25rem;">What you'll need</h5>
+        ${r.summary ? `<p class="approval-summary">${escapeHtml(r.summary)}</p>` : ''}
+
+        <h5>What you'll need</h5>
         <ul class="ingredients">${ing || '<li>(no ingredients returned)</li>'}</ul>
 
-        ${steps
-          ? `<h5 style="font-family:'Fraunces',serif; margin:1rem 0 0.25rem;">Steps</h5><ol class="steps">${steps}</ol>`
-          : (r.sourceUrl ? `<p><a href="${escapeHtml(r.sourceUrl)}" target="_blank" rel="noopener">Open the original recipe →</a></p>` : '')}
-
-        <div class="reactions" data-recipe-id="${escapeHtml(r.id)}" data-recipe-title="${escapeHtml(r.title)}" title="${escapeHtml(reactionTitle)}">
-          <span class="reactions-label">${isAuthed ? 'How was it?' : 'Sign in to react:'}</span>
-          <button class="reaction" type="button" data-reaction="loved" ${isAuthed ? '' : 'disabled'}>❤️ Loved</button>
-          <button class="reaction" type="button" data-reaction="liked" ${isAuthed ? '' : 'disabled'}>👍 Liked</button>
-          <button class="reaction" type="button" data-reaction="skipped" ${isAuthed ? '' : 'disabled'}>👎 Skip next time</button>
-        </div>
+        ${steps ? `<h5>Steps</h5><ol class="steps">${steps}</ol>` : ''}
 
         <button class="send" type="button" data-send-cart="${escapeHtml(r.id)}" data-provider="${escapeHtml(provider.id)}">
           Send to ${escapeHtml(provider.name)} →
         </button>
         <p class="demo-note">${escapeHtml(modeNote)}</p>
+
+        <div class="approval-foot">
+          <button class="chip alt" type="button" data-alternatives="1">Show me a different idea</button>
+          <span class="xref-footer" data-xref-for="${escapeHtml(r.id)}">${escapeHtml(xrefInitial)}</span>
+        </div>
       </div>
     `;
   }
@@ -583,23 +519,6 @@
     if (!Number.isFinite(n)) return '';
     if (Math.abs(n - Math.round(n)) < 0.05) return String(Math.round(n));
     return n.toFixed(2).replace(/\.?0+$/, '');
-  }
-
-  function trimSummary(s) {
-    s = String(s).replace(/<[^>]+>/g, '');
-    return s.length > 220 ? s.slice(0, 217).trimEnd() + '…' : s;
-  }
-
-  function escapeRecipeEmoji(r) {
-    const t = (r.title || '').toLowerCase();
-    if (/pasta|noodle|spaghetti|linguine|fettuccine|penne|farfalle/.test(t)) return '🍝';
-    if (/salmon|fish|tuna|cod/.test(t)) return '🐟';
-    if (/salad|bowl/.test(t)) return '🥗';
-    if (/soup|broth|stew/.test(t)) return '🍲';
-    if (/chicken/.test(t)) return '🍗';
-    if (/burger|sandwich/.test(t)) return '🥪';
-    if (/pizza/.test(t)) return '🍕';
-    return '🍽️';
   }
 
   // ---------- message helpers ----------
@@ -647,8 +566,10 @@
       path: null,
       messages: [],
       guided: { step: null, answers: {} },
-      lastRecipes: null,
-      preferences: loadPreferences()
+      recipesById: {},
+      cartProviders: state.cartProviders,
+      preferences: loadPreferences(),
+      auth: state.auth
     };
     render();
   }

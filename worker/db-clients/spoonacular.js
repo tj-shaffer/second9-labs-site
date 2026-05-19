@@ -1,7 +1,37 @@
 // Spoonacular Recipe API client.
 // Docs: https://spoonacular.com/food-api/docs
+//
+// Phase 6 demotes Spoonacular from primary recipe source to background
+// cross-reference. The legacy `searchRecipes` / `getRecipeDetails`
+// exports are retained but no longer called by the chat pipeline.
 
 const BASE = 'https://api.spoonacular.com';
+
+// Cross-reference shape: returns the number of matches and the first
+// candidate image. Never throws — returns null on failure so the
+// parallel xref fan-out is robust.
+export async function crossRef(query, env) {
+  const apiKey = env.SPOONACULAR_API_KEY;
+  if (!apiKey || !query) return null;
+  const url = new URL(BASE + '/recipes/complexSearch');
+  url.searchParams.set('apiKey', apiKey);
+  url.searchParams.set('query', query);
+  url.searchParams.set('number', '5');
+  url.searchParams.set('addRecipeInformation', 'false');
+  try {
+    const res = await fetch(url.toString());
+    if (!res.ok) return null;
+    const data = await res.json();
+    const results = data.results || [];
+    return {
+      source: 'spoonacular',
+      count: data.totalResults ?? results.length,
+      sampleImage: results[0]?.image || null
+    };
+  } catch {
+    return null;
+  }
+}
 
 // Search for recipes matching a free-text query and optional filters.
 // Returns a compact array safe for the LLM to reason about.
