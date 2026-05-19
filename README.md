@@ -2,32 +2,47 @@
 
 Everything you need to publish the site and apply the brand consistently elsewhere (business cards, invoices, proposals, social).
 
+> **Heads up — repo is now dual-purpose.** This README still covers the
+> Second 9 Labs marketing site (the original purpose). Since the
+> Kitchen OS arc shipped on the `kitchen-os` branch, the same repo
+> also hosts **Biba's Playground** — a Cloudflare Worker + AI app at
+> `/bibas-playground/recipes/`. For that side of the codebase, start
+> from [`CLAUDE.md`](CLAUDE.md) (current architecture orientation)
+> and `~/.claude/plans/what-s-the-scoop-i-silly-kahn.md` (full
+> roadmap). The brand-kit content below is unchanged.
+
 ---
 
 ## 1. What's in this folder
 
 ```
-second9-labs/
-├── index.html            Homepage
-├── projects.html         Project gallery
-├── project.html          Project detail template
-├── projects.json         ← your "admin panel" — edit this to add projects
-├── styles.css            Brand system + all page styles
-├── script.js             Scroll reveals + nav polish
-├── projects.js           Loads projects.json and renders the gallery/detail
-├── README.md             This file (brand guide)
-├── DEPLOYMENT.md         Step-by-step hosting instructions
-└── assets/
-    ├── favicon.svg
-    ├── logo-mark.svg         The 9 mark alone
-    ├── logo-primary.svg      Mark + wordmark
-    ├── icon-*.svg            Six service icons
-    └── images/               Project screenshots go here
-        └── placeholder-*.svg
+second9-labs-site/
+├── public/                       Browser-served assets (Cloudflare Workers assets dir)
+│   ├── index.html                Homepage
+│   ├── projects.{html,js,json}   Gallery + admin panel
+│   ├── project.html              Project detail template
+│   ├── styles.css                Brand system + all page styles
+│   ├── script.js                 Scroll reveals + nav polish
+│   ├── bibas-playground/         The "personal mini-apps" hub
+│   │   ├── index.html            Playground hub
+│   │   └── recipes/              The Kitchen OS recipe app (Phases 1–10)
+│   └── assets/                   Logos, icons, project images
+├── worker/                       Cloudflare Worker source (Kitchen OS backend)
+│   ├── index.js                  Route table + handlers
+│   ├── (many modules)            See CLAUDE.md for the full map
+│   └── agent/                    Computer-use agent + strategies/
+├── wrangler.jsonc                Cloudflare Worker config (bindings live here)
+├── package.json                  npm scripts (dev / deploy)
+├── .dev.vars.example             Template for local secrets
+├── CLAUDE.md                     Codebase orientation for Claude Code sessions
+├── README.md                     This file (brand kit + dual-purpose note)
+├── DEPLOYMENT.md                 Hosting instructions for the marketing site
+└── PRD.md                        v1 product spec (Kitchen OS-pivot predecessor)
 ```
 
-**To publish the site:** read `DEPLOYMENT.md`. Start-to-finish in about 45 minutes.
-**To add a project after launch:** edit `projects.json` on GitHub. Site redeploys automatically.
+**To publish the marketing side:** read `DEPLOYMENT.md`. Start-to-finish in about 45 minutes.
+**To work on Kitchen OS:** `npm run dev` to boot wrangler. Read `CLAUDE.md` first.
+**To add a project after launch:** edit `public/projects.json` on GitHub. Site redeploys automatically.
 
 ---
 
