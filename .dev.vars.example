@@ -10,6 +10,13 @@ RESEND_API_KEY=               # Resend transactional email for magic-link sign-i
 SESSION_SECRET=               # Random 32+ bytes, hex or base64; signs session cookies
 EMAIL_FROM=                   # e.g. "Biba's Kitchen <hi@your-domain.com>"
 
+# --- Phase 9 (auth modernization — Google OAuth primary) ---
+GOOGLE_CLIENT_ID=             # console.cloud.google.com → APIs & Services → Credentials
+GOOGLE_CLIENT_SECRET=         # paired secret from the same OAuth client
+                              # Authorized redirect URIs to add in Google console:
+                              #   http://localhost:8787/api/auth/google/callback   (dev)
+                              #   https://<your-domain>/api/auth/google/callback   (prod)
+
 # --- Phase 6 (Kitchen OS — recipe brain swap) ---
 ANTHROPIC_API_KEY=            # Claude Opus 4.7 — primary recipe author
 # RECIPE_AUTHOR=gemini        # Uncomment to force Gemini 2.5 Pro as the author

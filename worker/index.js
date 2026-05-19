@@ -13,6 +13,7 @@ import { getCrossReference } from './cross-reference.js';
 import { recordMessage, recordApprovedRecipe, getMemorySnapshot } from './memory.js';
 import { getCachedRecipeById } from './recipe-cache.js';
 import { ingestPaste, ingestUrl, listSources, deleteSource } from './ingest.js';
+import { startGoogleOAuth, handleGoogleCallback } from './auth-oauth.js';
 import {
   generateMagicToken,
   generateSessionId,
@@ -73,6 +74,14 @@ export default {
 
     if (path === '/api/auth/logout' && request.method === 'POST') {
       return handleAuthLogout(request, env);
+    }
+
+    if (path === '/api/auth/google/start' && request.method === 'GET') {
+      return handleGoogleStart(request, env);
+    }
+
+    if (path === '/api/auth/google/callback' && request.method === 'GET') {
+      return handleGoogleCallbackRoute(request, env);
     }
 
     if (path === '/api/profile' && request.method === 'GET') {
@@ -293,6 +302,55 @@ function redirectWithMsg(origin, kind) {
     status: 302,
     headers: { 'Location': `${origin}/bibas-playground/recipes/login.html?error=${encodeURIComponent(kind)}` }
   });
+}
+
+// ---------- Google OAuth route handlers (Phase 9) ----------
+
+async function handleGoogleStart(request, env) {
+  const url = new URL(request.url);
+  if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET) {
+    return redirectWithMsg(url.origin, 'oauth_not_configured');
+  }
+  try {
+    const returnTo = url.searchParams.get('return_to') || '/bibas-playground/recipes/';
+    const authUrl = await startGoogleOAuth(env, { origin: url.origin, returnTo });
+    return Response.redirect(authUrl, 302);
+  } catch (err) {
+    console.error('google oauth start failed:', err);
+    return redirectWithMsg(url.origin, 'oauth_start_failed');
+  }
+}
+
+async function handleGoogleCallbackRoute(request, env) {
+  const url = new URL(request.url);
+  if (!env.BIBA_USERS || !env.SESSION_SECRET) {
+    return redirectWithMsg(url.origin, 'misconfigured');
+  }
+  const code = url.searchParams.get('code');
+  const state = url.searchParams.get('state');
+  const errorParam = url.searchParams.get('error');
+  if (errorParam) return redirectWithMsg(url.origin, `google_${errorParam}`);
+
+  try {
+    const { email, returnTo } = await handleGoogleCallback(env, { origin: url.origin, code, state });
+    await ensureUser(env, email);
+
+    const sid = generateSessionId();
+    await putSession(env, sid, email);
+    const secure = url.protocol === 'https:';
+    const cookie = await buildSessionCookie(sid, env.SESSION_SECRET, { secure });
+
+    return new Response(null, {
+      status: 302,
+      headers: {
+        'Location': `${url.origin}${returnTo}`,
+        'Set-Cookie': cookie
+      }
+    });
+  } catch (err) {
+    console.error('google oauth callback failed:', err);
+    return redirectWithMsg(url.origin, 'oauth_callback_failed');
+  }
 }
 
 async function handleCartBuild(request, env, ctx) {
