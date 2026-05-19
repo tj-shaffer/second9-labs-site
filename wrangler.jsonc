@@ -64,4 +64,11 @@
 			"remote": true
 		}
 	]
+	// Phase 10 — Browser Rendering binding for the computer-use agent.
+	// Requires Workers Paid plan ($5/mo) + Browser Rendering enabled on
+	// the account. Until then, worker/agent/browser.js falls back to a
+	// dry-run stub so the rest of the stack (vault, audit, SSE, UI)
+	// remains testable. Uncomment when you flip the agent to live:
+	//
+	// , "browser": { "binding": "BROWSER" }
 }

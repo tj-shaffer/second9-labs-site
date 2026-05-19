@@ -39,6 +39,18 @@ RAPID_API_KEY=                # Tasty via RapidAPI — cross-reference
 #   npx wrangler vectorize create biba-memory-corpus --dimensions=768 --metric=cosine
 #   npx wrangler vectorize create-metadata-index biba-memory-corpus --property-name=email --type=string
 
-# --- Future (Phase 10 — when Instacart IDP approval lands) ---
+# --- Phase 10 (Computer-use agent — vault + Browser Rendering) ---
+VAULT_MASTER_KEY=             # Base64 of 32+ random bytes. Local: generate with
+                              #   node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+                              # Prod: never reuse local key; wrangler secret put VAULT_MASTER_KEY
+# Cloudflare resources to flip the agent from dry-run to live:
+#   - Workers Paid plan ($5/mo)
+#   - Browser Rendering enabled on the account
+#   - Uncomment the "browser" binding in wrangler.jsonc
+#   - Add @cloudflare/puppeteer as a runtime dependency:
+#       npm install @cloudflare/puppeteer
+#   - Real Anthropic credits (Claude Computer Use is paid usage)
+
+# --- Future (when Instacart IDP approval lands) ---
 # INSTACART_API_KEY=          # Auto-upgrades the Instacart provider from search-URL to real cart
 

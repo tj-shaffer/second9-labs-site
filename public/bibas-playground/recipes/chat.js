@@ -62,7 +62,8 @@
     recipesById: {},  // id -> full authored recipe (for cart hand-off + xref poll)
     cartProviders: { ...FALLBACK_PROVIDERS },
     preferences: loadPreferences(),
-    auth: { email: null, historyCount: 0 }
+    auth: { email: null, historyCount: 0 },
+    vaultProviders: {}  // Phase 10: which providers have stored creds
   };
 
   fetch('/api/cart/providers').then(r => r.ok ? r.json() : null).then(data => {
@@ -87,6 +88,12 @@
       if (data.preferences && typeof data.preferences === 'object') {
         state.preferences = { ...DEFAULT_PREFS, ...state.preferences, ...data.preferences };
       }
+      // Phase 10: load vault status so the Send button can switch into
+      // "Run agent" mode when the user has stored creds for the
+      // chosen provider.
+      fetch('/api/vault/status')
+        .then(r => r.ok ? r.json() : null)
+        .then(v => { if (v?.vaults) state.vaultProviders = v.vaults; });
       renderAuthChrome();
     } catch (err) {
       console.warn('chat.js: /api/profile fetch failed', err);
@@ -331,6 +338,13 @@
       return;
     }
 
+    // Phase 10: if the user is signed in AND has vaulted creds for the
+    // chosen provider, kick off the autonomous agent instead of the
+    // public-search hand-off.
+    if (state.auth.email && state.vaultProviders[providerId]) {
+      return runAgentForRecipe(buttonEl, recipeId, providerId);
+    }
+
     const originalText = buttonEl.textContent;
     buttonEl.disabled = true;
     buttonEl.textContent = 'Opening…';
@@ -368,6 +382,93 @@
         `<em>${escapeHtml(err.message || 'unknown error')}</em>. Try again in a moment.</p>`,
         "Couldn't hand off to cart provider."
       );
+    } finally {
+      buttonEl.disabled = false;
+      buttonEl.textContent = originalText;
+    }
+  }
+
+  // ---------- Phase 10: autonomous agent runner ----------
+  async function runAgentForRecipe(buttonEl, recipeId, providerId) {
+    const originalText = buttonEl.textContent;
+    buttonEl.disabled = true;
+    buttonEl.textContent = 'Agent working…';
+
+    const liveId = 'agent-live-' + Date.now();
+    state.messages.push({
+      role: 'assistant',
+      id: liveId,
+      text: 'Agent run starting…',
+      html: `<div class="agent-live"><h5>Agent run · ${escapeHtml(providerId)}</h5><ul id="${liveId}-feed"></ul></div>`
+    });
+    drawMessages();
+
+    const feed = () => document.getElementById(`${liveId}-feed`);
+    const pushLine = (kind, text) => {
+      const f = feed();
+      if (!f) return;
+      const li = document.createElement('li');
+      li.className = `agent-line agent-${kind}`;
+      li.innerHTML = `<strong>${escapeHtml(kind)}</strong> · ${escapeHtml(text)}`;
+      f.appendChild(li);
+      f.parentElement.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    };
+
+    try {
+      const res = await fetch('/api/agent/run', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ recipeId, providerId })
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || `HTTP ${res.status}`);
+      }
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = '';
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const events = buf.split('\n\n');
+        buf = events.pop();
+        for (const block of events) {
+          if (!block.startsWith('event:')) continue;
+          const eventLine = block.split('\n').find(l => l.startsWith('event:')) || '';
+          const dataLine = block.split('\n').find(l => l.startsWith('data:')) || '';
+          const event = eventLine.slice('event:'.length).trim();
+          const data = JSON.parse(dataLine.slice('data:'.length).trim() || 'null');
+          if (event === 'start') pushLine('start', `Run ${data.runId} for ${data.recipeTitle}`);
+          else if (event === 'screenshot') pushLine('screenshot', data.hint + (data.hasImage ? ' (image stored)' : ''));
+          else if (event === 'decision') pushLine('decision', data.reasoning.slice(0, 200));
+          else if (event === 'action') pushLine('action', `${data.action}${data.ok ? '' : ' (failed: ' + (data.error || '') + ')'}`);
+          else if (event === 'note') pushLine('note', data.note);
+          else if (event === 'error') pushLine('error', data.message);
+          else if (event === 'done') {
+            const r = data.result || {};
+            pushLine('done', r.status === 'stopped_for_review'
+              ? `Cart ready · ${r.ingredientCount || 0} items · ${r.dryRun ? '(DRY RUN — no real browser)' : 'open Instacart to review + checkout'}`
+              : `status=${r.status}${r.reason ? ' · ' + r.reason : ''}`);
+            if (r.cartUrl && !r.dryRun) {
+              const f = feed();
+              if (f) {
+                const li = document.createElement('li');
+                li.className = 'agent-line agent-done';
+                const a = document.createElement('a');
+                a.href = r.cartUrl;
+                a.target = '_blank';
+                a.rel = 'noopener';
+                a.textContent = 'Open cart →';
+                li.appendChild(a);
+                f.appendChild(li);
+              }
+            }
+          }
+        }
+      }
+    } catch (err) {
+      pushLine('error', err.message || String(err));
     } finally {
       buttonEl.disabled = false;
       buttonEl.textContent = originalText;
