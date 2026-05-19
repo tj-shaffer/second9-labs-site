@@ -1,14 +1,26 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "second-9-labs",
+  "main": "worker/index.js",
   "compatibility_date": "2026-04-21",
   "observability": {
     "enabled": true
   },
   "assets": {
-    "directory": "."
+    "directory": "./public"
   },
   "compatibility_flags": [
     "nodejs_compat"
+  ],
+  // KV for per-user profile, sessions, magic-link tokens, recipe history.
+  // For local dev, miniflare uses a SQLite-backed simulation — the `id` value
+  // is only meaningful when deploying. Before `npm run deploy`, run:
+  //   npx wrangler kv namespace create biba_users
+  // and paste the returned id below.
+  "kv_namespaces": [
+    {
+      "binding": "BIBA_USERS",
+      "id": "local-dev-placeholder-replace-before-deploy"
+    }
   ]
 }
