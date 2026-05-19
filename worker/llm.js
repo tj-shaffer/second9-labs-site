@@ -107,7 +107,7 @@ export async function runChat({ apiKey, model = DEFAULT_MODEL, system, contents,
 // (most recent first). Phase 6 retired reaction buttons in favor of
 // implicit signals: sent_to_cart = positive, asked_alternatives = soft
 // negative.
-export function buildSystemPrompt(preferences = {}, knownRecipes = [], history = []) {
+export function buildSystemPrompt(preferences = {}, knownRecipes = [], history = [], memorySnapshot = null) {
   const {
     organic = true,
     householdSize = 2,
@@ -185,6 +185,30 @@ export function buildSystemPrompt(preferences = {}, knownRecipes = [], history =
       );
       if (liked.length)  lines.push(`- Sent to cart (positive): ${liked.map(r => `"${r.title}"`).join(', ')}`);
       if (passed.length) lines.push(`- Asked for alternatives (soft negative): ${passed.map(r => `"${r.title}"`).join(', ')} — avoid close variants.`);
+    }
+  }
+
+  // Vectorize-retrieved memory snapshot. Distinct from `history` —
+  // these are semantically relevant chunks pulled by the current user
+  // query, not a chronological list. Format as gentle context, not as
+  // instructions to recite.
+  if (memorySnapshot) {
+    const msgs = (memorySnapshot.messages || []).filter(m => m.text);
+    const recs = (memorySnapshot.recipes || []).filter(r => r.title);
+    if (msgs.length || recs.length) {
+      lines.push("", "## What you remember about this person",
+        "Semantic recall from past sessions. Let it shape your culinary brief; don't recite it.");
+      if (msgs.length) {
+        lines.push("Things they've said before:");
+        for (const m of msgs) lines.push(`- "${String(m.text).slice(0, 200)}"`);
+      }
+      if (recs.length) {
+        lines.push("Recipes they actually cooked (sent-to-cart):");
+        for (const r of recs) {
+          const tags = [r.cuisineTags, r.proteins, r.prepStyles].flat().filter(Boolean).slice(0, 5).join(', ');
+          lines.push(`- "${r.title}"${tags ? ` (${tags})` : ''}`);
+        }
+      }
     }
   }
 

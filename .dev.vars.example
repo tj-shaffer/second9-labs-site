@@ -19,6 +19,14 @@ EDAMAM_APP_ID=                # Edamam Recipe Search API — cross-reference
 EDAMAM_APP_KEY=               # Edamam Recipe Search API — cross-reference
 RAPID_API_KEY=                # Tasty via RapidAPI — cross-reference
 
+# --- Phase 7 (Memory foundation — Vectorize RAG) ---
+# No secrets — Workers AI + Vectorize bindings live in wrangler.jsonc.
+# Before deploy, provision the two Vectorize indexes once:
+#   npx wrangler vectorize create biba-memory-conversations --dimensions=768 --metric=cosine
+#   npx wrangler vectorize create biba-memory-recipes       --dimensions=768 --metric=cosine
+#   npx wrangler vectorize create-metadata-index biba-memory-conversations --property-name=email --type=string
+#   npx wrangler vectorize create-metadata-index biba-memory-recipes       --property-name=email --type=string
+
 # --- Future (Phase 10 — when Instacart IDP approval lands) ---
 # INSTACART_API_KEY=          # Auto-upgrades the Instacart provider from search-URL to real cart
 

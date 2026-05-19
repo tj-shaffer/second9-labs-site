@@ -10,6 +10,8 @@ import { TOOL_DECLARATIONS, dispatch } from './tools.js';
 import { listProviders, buildCart } from './cart/index.js';
 import { serveRecipeImage } from './image-gen.js';
 import { getCrossReference } from './cross-reference.js';
+import { recordMessage, recordApprovedRecipe, getMemorySnapshot } from './memory.js';
+import { getCachedRecipeById } from './recipe-cache.js';
 import {
   generateMagicToken,
   generateSessionId,
@@ -57,7 +59,7 @@ export default {
     }
 
     if (path === '/api/cart/build' && request.method === 'POST') {
-      return handleCartBuild(request, env);
+      return handleCartBuild(request, env, ctx);
     }
 
     if (path === '/api/auth/request' && request.method === 'POST') {
@@ -226,7 +228,7 @@ function redirectWithMsg(origin, kind) {
   });
 }
 
-async function handleCartBuild(request, env) {
+async function handleCartBuild(request, env, ctx) {
   let body;
   try { body = await request.json(); }
   catch { return json({ error: 'bad_request', message: 'Body must be valid JSON.' }, 400); }
@@ -239,8 +241,9 @@ async function handleCartBuild(request, env) {
   try {
     const result = await buildCart(provider, ingredients, env);
 
-    // Phase 6 implicit-signal: send-to-cart is the positive signal that
-    // replaced the retired reaction buttons. Best-effort, never blocks.
+    // Send-to-cart is the positive implicit signal that replaced the
+    // retired reaction buttons. Best-effort writes to KV (chronological
+    // history) AND Vectorize (semantic memory). Never blocks the response.
     if (recipeId && title) {
       const user = await currentUser(request, env).catch(() => null);
       if (user) {
@@ -249,6 +252,15 @@ async function handleCartBuild(request, env) {
           title,
           signal: 'sent_to_cart'
         }).catch(err => console.warn('history append failed:', err));
+
+        if (ctx?.waitUntil) {
+          ctx.waitUntil((async () => {
+            const recipe = await getCachedRecipeById(env, recipeId);
+            if (recipe) {
+              await recordApprovedRecipe(env, { email: user.email, recipe, signal: 'sent_to_cart' });
+            }
+          })());
+        }
       }
     }
 
@@ -304,7 +316,22 @@ async function handleChat(request, env, ctx) {
     return json({ error: 'bad_request', message: 'No message text after normalization.' }, 400);
   }
 
-  const system = buildSystemPrompt(preferences, knownRecipes, history);
+  // Phase 7: pull a memory snapshot keyed off the most recent user
+  // message. Authed-only — anonymous users get the same v1 experience.
+  let memorySnapshot = null;
+  const lastUserText = [...messages].reverse().find(m => m.role === 'user')?.text || '';
+  if (user && lastUserText) {
+    memorySnapshot = await getMemorySnapshot(env, { email: user.email, query: lastUserText })
+      .catch(err => { console.warn('memory snapshot failed:', err?.message || err); return null; });
+
+    // Record the user message into the conversations index for future
+    // sessions. Fire-and-forget — never block the response on it.
+    if (ctx?.waitUntil) {
+      ctx.waitUntil(recordMessage(env, { email: user.email, text: lastUserText }));
+    }
+  }
+
+  const system = buildSystemPrompt(preferences, knownRecipes, history, memorySnapshot);
 
   try {
     const { text, toolResults } = await runChat({
