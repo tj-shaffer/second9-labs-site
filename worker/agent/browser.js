@@ -49,7 +49,7 @@ class CloudflareSession {
     }
     this.browser = await puppeteer.default.launch(this.env.BROWSER);
     this.page = await this.browser.newPage();
-    if (startUrl) await this.page.goto(startUrl, { waitUntil: 'networkidle0' });
+    if (startUrl) await this._navigate(startUrl);
   }
 
   async screenshot() {
@@ -59,7 +59,16 @@ class CloudflareSession {
   }
 
   async navigate(url) {
-    await this.page.goto(url, { waitUntil: 'networkidle0' });
+    await this._navigate(url);
+  }
+
+  // Modern SPAs (Instacart, Uber Eats, etc.) never reach `networkidle0`
+  // because of analytics/beacons. Use `domcontentloaded` and add a
+  // small settle window so the React/JS render lands before Claude
+  // takes its first screenshot.
+  async _navigate(url) {
+    await this.page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
+    await new Promise(r => setTimeout(r, 1500));
   }
 
   async click(x, y) {
