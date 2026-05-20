@@ -21,7 +21,7 @@ const MAX_TOOL_LOOPS = 5;
 //   text         — final assistant text
 //   history      — full updated history including all model + tool turns
 //   toolResults  — list of { name, args, result } in call order
-export async function runChat({ apiKey, model = DEFAULT_MODEL, system, contents, tools, env, dispatch }) {
+export async function runChat({ apiKey, model = DEFAULT_MODEL, system, contents, tools, env, dispatch, preferences, executionCtx, userEmail = null }) {
   const url = `${GEMINI_BASE}/${encodeURIComponent(model)}:generateContent`;
   const declarations = tools && tools.length ? [{ function_declarations: tools }] : undefined;
 
@@ -76,11 +76,12 @@ export async function runChat({ apiKey, model = DEFAULT_MODEL, system, contents,
     for (const part of functionCallParts) {
       const { name, args } = part.functionCall;
       try {
-        const result = await dispatch(name, args || {}, env);
+        const result = await dispatch(name, args || {}, env, { preferences, executionCtx, userEmail });
         toolResults.push({ name, args: args || {}, result });
         responseParts.push({ functionResponse: { name, response: result } });
       } catch (err) {
         const errMsg = String(err?.message || err);
+        console.error(`dispatch(${name}) failed:`, errMsg);
         toolResults.push({ name, args: args || {}, error: errMsg });
         responseParts.push({
           functionResponse: { name, response: { error: errMsg } }
@@ -96,11 +97,17 @@ export async function runChat({ apiKey, model = DEFAULT_MODEL, system, contents,
   throw new Error(`Gemini tool loop exceeded ${MAX_TOOL_LOOPS} iterations`);
 }
 
-// Build a system prompt from the user's stored preferences and (optionally) the
-// recipes they've already seen in this conversation, so the model can call
-// get_recipe_details with the right ID without re-searching.
-// `history` is an array of { recipeId, title, reaction } from KV (most recent first).
-export function buildSystemPrompt(preferences = {}, knownRecipes = [], history = []) {
+// Build the system prompt for the Phase 6 LLM-author flow. Gemini drives
+// the conversation; when the user signals what they want, Gemini calls
+// `generate_recipe`, which routes server-side to Claude Opus 4.7 as the
+// recipe author. Gemini does NOT search a catalog and does NOT invent
+// recipes itself.
+//
+// `history` is an array of { recipeId, title, signal, at } from KV
+// (most recent first). Phase 6 retired reaction buttons in favor of
+// implicit signals: sent_to_cart = positive, asked_alternatives = soft
+// negative.
+export function buildSystemPrompt(preferences = {}, knownRecipes = [], history = [], memorySnapshot = null) {
   const {
     organic = true,
     householdSize = 2,
@@ -114,57 +121,51 @@ export function buildSystemPrompt(preferences = {}, knownRecipes = [], history =
     "You are a warm, focused kitchen helper for someone deciding what to cook tonight.",
     "Be concise and friendly. Two or three sentences per turn, never long monologues.",
     "",
-    "## How to suggest recipes",
-    "- Never invent recipes. Always call `search_recipes` to find real options."
+    "## How recipes happen",
+    "- You do NOT search a catalog and you do NOT invent a recipe in prose.",
+    "- When the user has expressed what they want (free-text or guided-wizard answers), call `generate_recipe` with a short culinary brief. An expert chef authors the full recipe server-side and the frontend renders the card.",
+    "- Do not list options. One recipe per ask.",
+    "- After `generate_recipe` returns, introduce the dish in 1–2 warm sentences. Don't restate ingredients or steps — the card shows them.",
+    "- If the user asks for alternatives or 'something else', call `generate_recipe` again with a different angle (different cuisine, different protein, different effort level). This counts as a soft negative signal — pivot meaningfully, don't recycle."
   ];
 
   if (decisiveMode) {
     lines.push(
-      "- **DECISIVE MODE is ON.** Don't list options. Pick the single best match for what the user said.",
-      "- Sequence: call `search_recipes` with number=3 to see options, silently pick the strongest fit, then immediately call `get_recipe_details` for that ID. Introduce the chosen recipe in 1–2 warm sentences (don't mention the other candidates you considered).",
-      "- If the user pushes back or asks for an alternative, pick a different one — again, just one. Never list."
-    );
-  } else {
-    lines.push(
-      "- After a search, briefly introduce 1–3 of the best results in plain prose. The recipe cards themselves render separately, so don't repeat full ingredient lists in your text.",
-      "- If the user picks one by name (says 'let's do X', names a specific recipe, says 'yes to the carbonara'), you MUST call `get_recipe_details` to fetch ingredients & instructions. Look up the ID in the \"Recipes already shown\" list below — never ask the user to repeat themselves, never search for an ID you already have.",
-      "- If you genuinely don't have the ID for a recipe the user names (e.g., they describe something new), call `search_recipes` with a short core query (e.g., \"carbonara\", not the full marketing title) and then `get_recipe_details` with the ID from that result.",
-      "- If the user asks for alternatives, call `search_recipes` again with a different angle."
+      "",
+      "**DECISIVE MODE is ON.** Skip clarifying questions when you have enough to commit. If the user said 'something cozy', commit on the first generate_recipe call — don't ask 'soup or stew?' first."
     );
   }
 
   lines.push(
     "",
-    "## Filters to respect",
-    `- Cooking for ${householdSize} ${householdSize === 1 ? 'person' : 'people'}.`
+    "## Constraints to pass into `generate_recipe.query`",
+    `- Household size: ${householdSize} ${householdSize === 1 ? 'person' : 'people'}.`
   );
 
   if (organic) {
-    lines.push(
-      "- Lean toward whole-food, organic-friendly ingredients when there's a choice. Search queries should favor 'fresh', 'whole', or 'farm' phrasings when natural; don't be heavy-handed.",
-    );
+    lines.push("- Phrase the brief to favor whole-food, organic-friendly ingredients when natural — never force it.");
   }
   if (diet.length) {
-    lines.push(`- Dietary requirement: ${diet.join(', ')}. Pass these to \`search_recipes\` via the \`diet\` parameter.`);
+    lines.push(`- Dietary requirement (absolute): ${diet.join(', ')}. Bake into the query.`);
   }
   if (intolerances.length) {
-    lines.push(`- Intolerances (must avoid): ${intolerances.join(', ')}. Pass these to \`search_recipes\` via the \`intolerances\` parameter — never skip.`);
+    lines.push(`- Intolerances (absolute, must avoid): ${intolerances.join(', ')}. Bake into the query.`);
   }
   if (dislikes && dislikes.trim()) {
-    lines.push(`- The user dislikes: ${dislikes.trim()}. Avoid recipes that lean on these ingredients.`);
+    lines.push(`- User dislikes: ${dislikes.trim()}. Avoid dishes that lean on these.`);
   }
 
   lines.push(
     "",
     "## Tone",
-    "Warm, specific, not gushy. No emojis unless the user uses one first. Refer to recipes by name; don't say 'recipe #1', 'option A', etc."
+    "Warm, specific, not gushy. No emojis unless the user uses one first. Refer to dishes by name."
   );
 
   if (Array.isArray(knownRecipes) && knownRecipes.length) {
     lines.push(
       "",
-      "## Recipes already shown to the user in this conversation",
-      "(Use these IDs directly when calling get_recipe_details — do not search again for these.)"
+      "## Recipes already shown in this conversation",
+      "Don't re-author the same dish. If asked for variations, call generate_recipe with a varied brief."
     );
     for (const r of knownRecipes) {
       if (r && r.id && r.title) {
@@ -173,22 +174,41 @@ export function buildSystemPrompt(preferences = {}, knownRecipes = [], history =
     }
   }
 
-  // Memory: surface a compact view of past reactions so the model can lean toward
-  // what the user has loved and avoid recipes they've skipped.
   if (Array.isArray(history) && history.length) {
-    const loved = history.filter(h => h.reaction === 'loved').slice(0, 10);
-    const liked = history.filter(h => h.reaction === 'liked').slice(0, 10);
-    const skipped = history.filter(h => h.reaction === 'skipped').slice(0, 10);
-
-    if (loved.length || liked.length || skipped.length) {
+    const liked = history.filter(h => h.signal === 'sent_to_cart').slice(0, 10);
+    const passed = history.filter(h => h.signal === 'asked_alternatives').slice(0, 10);
+    if (liked.length || passed.length) {
       lines.push(
         "",
-        "## What the user has told you about past recipes",
-        "Use this to steer suggestions. Don't mention the list verbatim; just let it shape your picks."
+        "## Implicit signals from past sessions",
+        "Use these to steer the brief. Don't mention the list — just let it shape what you ask for."
       );
-      if (loved.length)   lines.push(`- Loved: ${loved.map(r => `"${r.title}"`).join(', ')}`);
-      if (liked.length)   lines.push(`- Liked: ${liked.map(r => `"${r.title}"`).join(', ')}`);
-      if (skipped.length) lines.push(`- Skip next time: ${skipped.map(r => `"${r.title}"`).join(', ')} — do not suggest these or close variants.`);
+      if (liked.length)  lines.push(`- Sent to cart (positive): ${liked.map(r => `"${r.title}"`).join(', ')}`);
+      if (passed.length) lines.push(`- Asked for alternatives (soft negative): ${passed.map(r => `"${r.title}"`).join(', ')} — avoid close variants.`);
+    }
+  }
+
+  // Vectorize-retrieved memory snapshot. Distinct from `history` —
+  // these are semantically relevant chunks pulled by the current user
+  // query, not a chronological list. Format as gentle context, not as
+  // instructions to recite.
+  if (memorySnapshot) {
+    const msgs = (memorySnapshot.messages || []).filter(m => m.text);
+    const recs = (memorySnapshot.recipes || []).filter(r => r.title);
+    if (msgs.length || recs.length) {
+      lines.push("", "## What you remember about this person",
+        "Semantic recall from past sessions. Let it shape your culinary brief; don't recite it.");
+      if (msgs.length) {
+        lines.push("Things they've said before:");
+        for (const m of msgs) lines.push(`- "${String(m.text).slice(0, 200)}"`);
+      }
+      if (recs.length) {
+        lines.push("Recipes they actually cooked (sent-to-cart):");
+        for (const r of recs) {
+          const tags = [r.cuisineTags, r.proteins, r.prepStyles].flat().filter(Boolean).slice(0, 5).join(', ');
+          lines.push(`- "${r.title}"${tags ? ` (${tags})` : ''}`);
+        }
+      }
     }
   }
 

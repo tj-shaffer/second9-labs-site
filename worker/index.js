@@ -1,15 +1,28 @@
 // Cloudflare Worker entrypoint for Second 9 Labs site.
 //
-// Static assets are served from the repo root via the assets binding.
-// This Worker only runs for paths that aren't matched by an asset
-// (default Workers Assets behavior when run_worker_first is unset).
-//
-// Phase 3 wires /api/recipes/chat to Gemini + Spoonacular.
-// Phase 4 will wire /api/cart/build to Instacart's public search URL.
+// Phase 6 (Kitchen OS): Gemini drives conversation, Claude Opus 4.7
+// authors recipes via tool-use, Imagen 3 generates the photo (cached
+// in R2), and Spoonacular + Edamam + TheMealDB + Tasty cross-reference
+// the LLM's output in the background via ctx.waitUntil.
 
 import { runChat, buildSystemPrompt } from './llm.js';
 import { TOOL_DECLARATIONS, dispatch } from './tools.js';
 import { listProviders, buildCart } from './cart/index.js';
+import { serveRecipeImage } from './image-gen.js';
+import { getCrossReference } from './cross-reference.js';
+import { recordMessage, recordApprovedRecipe, getMemorySnapshot } from './memory.js';
+import { getCachedRecipeById } from './recipe-cache.js';
+import { ingestPaste, ingestUrl, listSources, deleteSource } from './ingest.js';
+import { startGoogleOAuth, handleGoogleCallback } from './auth-oauth.js';
+import {
+  storeCredentials,
+  loadCredentials,
+  deleteCredentials,
+  getVaultStatus,
+  listSupportedProviders
+} from './vault.js';
+import { runAgentSSE, listAgentProviders } from './agent/index.js';
+import { listRuns, getRunLog } from './agent/audit.js';
 import {
   generateMagicToken,
   generateSessionId,
@@ -38,7 +51,18 @@ export default {
     const path = url.pathname;
 
     if (path === '/api/recipes/chat' && request.method === 'POST') {
-      return handleChat(request, env);
+      return handleChat(request, env, ctx);
+    }
+
+    if (path.startsWith('/api/recipes/xref/') && request.method === 'GET') {
+      const id = decodeURIComponent(path.slice('/api/recipes/xref/'.length));
+      const xref = await getCrossReference(env, id);
+      return json(xref || { pending: true });
+    }
+
+    if (path.startsWith('/api/recipe-image/') && request.method === 'GET') {
+      const key = decodeURIComponent(path.slice('/api/recipe-image/'.length));
+      return serveRecipeImage(env, key);
     }
 
     if (path === '/api/cart/providers' && request.method === 'GET') {
@@ -46,7 +70,7 @@ export default {
     }
 
     if (path === '/api/cart/build' && request.method === 'POST') {
-      return handleCartBuild(request, env);
+      return handleCartBuild(request, env, ctx);
     }
 
     if (path === '/api/auth/request' && request.method === 'POST') {
@@ -61,6 +85,14 @@ export default {
       return handleAuthLogout(request, env);
     }
 
+    if (path === '/api/auth/google/start' && request.method === 'GET') {
+      return handleGoogleStart(request, env);
+    }
+
+    if (path === '/api/auth/google/callback' && request.method === 'GET') {
+      return handleGoogleCallbackRoute(request, env);
+    }
+
     if (path === '/api/profile' && request.method === 'GET') {
       return handleProfileGet(request, env);
     }
@@ -69,15 +101,102 @@ export default {
       return handleProfilePut(request, env);
     }
 
-    if (path === '/api/recipes/feedback' && request.method === 'POST') {
-      return handleRecipeFeedback(request, env);
+    // ---- Phase 8: corpus (cookbook) routes ----
+    if (path === '/api/corpus' && request.method === 'GET') {
+      return handleCorpusList(request, env);
+    }
+    if (path === '/api/corpus/paste' && request.method === 'POST') {
+      return handleCorpusPaste(request, env);
+    }
+    if (path === '/api/corpus/url' && request.method === 'POST') {
+      return handleCorpusUrl(request, env);
+    }
+    if (path.startsWith('/api/corpus/') && request.method === 'DELETE') {
+      const sourceId = decodeURIComponent(path.slice('/api/corpus/'.length));
+      return handleCorpusDelete(request, env, sourceId);
+    }
+
+    // ---- Phase 10: vault + agent routes ----
+    if (path === '/api/vault/providers' && request.method === 'GET') {
+      return json({ providers: listSupportedProviders() });
+    }
+    if (path === '/api/vault/status' && request.method === 'GET') {
+      return handleVaultStatus(request, env);
+    }
+    if (path.startsWith('/api/vault/') && request.method === 'PUT') {
+      const provider = decodeURIComponent(path.slice('/api/vault/'.length));
+      return handleVaultPut(request, env, provider);
+    }
+    if (path.startsWith('/api/vault/') && request.method === 'DELETE') {
+      const provider = decodeURIComponent(path.slice('/api/vault/'.length));
+      return handleVaultDelete(request, env, provider);
+    }
+    if (path === '/api/agent/providers' && request.method === 'GET') {
+      return json({ providers: listAgentProviders() });
+    }
+    if (path === '/api/agent/run' && request.method === 'POST') {
+      return handleAgentRun(request, env, ctx);
+    }
+    if (path === '/api/agent/runs' && request.method === 'GET') {
+      return handleAgentRuns(request, env);
+    }
+    if (path.startsWith('/api/agent/runs/') && request.method === 'GET') {
+      const runId = decodeURIComponent(path.slice('/api/agent/runs/'.length));
+      return handleAgentRunLog(request, env, runId);
     }
 
     return json({ error: 'not_found', path }, 404);
   }
 };
 
-async function handleRecipeFeedback(request, env) {
+// ---------- vault handlers (Phase 10) ----------
+
+async function handleVaultStatus(request, env) {
+  const user = await currentUser(request, env);
+  if (!user) return json({ error: 'unauthenticated' }, 401);
+  if (!env.VAULT_MASTER_KEY) return json({ configured: false, vaults: {} });
+  const vaults = await getVaultStatus(env, { email: user.email });
+  return json({ configured: true, vaults });
+}
+
+async function handleVaultPut(request, env, provider) {
+  const user = await currentUser(request, env);
+  if (!user) return json({ error: 'unauthenticated' }, 401);
+  if (!env.VAULT_MASTER_KEY) return json({ error: 'vault_not_configured', message: 'VAULT_MASTER_KEY not set on the Worker.' }, 500);
+
+  let body;
+  try { body = await request.json(); }
+  catch { return json({ error: 'bad_request', message: 'Body must be valid JSON.' }, 400); }
+  if (!body?.consent) return json({ error: 'consent_required', message: 'Must accept the ToS-grey disclosure.' }, 400);
+
+  const credentials = body?.credentials;
+  if (!credentials || typeof credentials !== 'object') {
+    return json({ error: 'bad_request', message: '`credentials` object required.' }, 400);
+  }
+
+  try {
+    const result = await storeCredentials(env, { email: user.email, provider, credentials });
+    return json({ ok: true, ...result });
+  } catch (err) {
+    console.error('vault put failed:', err);
+    return json({ error: 'vault_failed', message: String(err?.message || err) }, 500);
+  }
+}
+
+async function handleVaultDelete(request, env, provider) {
+  const user = await currentUser(request, env);
+  if (!user) return json({ error: 'unauthenticated' }, 401);
+  try {
+    await deleteCredentials(env, { email: user.email, provider });
+    return json({ ok: true });
+  } catch (err) {
+    return json({ error: 'vault_failed', message: String(err?.message || err) }, 500);
+  }
+}
+
+// ---------- agent handlers (Phase 10) ----------
+
+async function handleAgentRun(request, env, ctx) {
   const user = await currentUser(request, env);
   if (!user) return json({ error: 'unauthenticated' }, 401);
 
@@ -85,19 +204,78 @@ async function handleRecipeFeedback(request, env) {
   try { body = await request.json(); }
   catch { return json({ error: 'bad_request', message: 'Body must be valid JSON.' }, 400); }
 
-  const recipeId = body?.recipeId;
-  const title = body?.title;
-  const reaction = body?.reaction;
-  const allowedReactions = ['loved', 'liked', 'skipped'];
-  if (recipeId == null || !title || !allowedReactions.includes(reaction)) {
-    return json({
-      error: 'bad_request',
-      message: 'Body must include recipeId, title, and reaction (loved|liked|skipped).'
-    }, 400);
-  }
+  const { recipeId, providerId = 'instacart' } = body || {};
+  if (!recipeId) return json({ error: 'bad_request', message: '`recipeId` required.' }, 400);
 
-  const history = await appendHistory(env, user.email, { recipeId, title, reaction });
-  return json({ ok: true, historyCount: history.length });
+  const recipe = await getCachedRecipeById(env, recipeId);
+  if (!recipe) return json({ error: 'recipe_not_found', message: 'Recipe not found in cache. Re-generate it first.' }, 404);
+
+  return runAgentSSE({ email: user.email, recipe, providerId, env, ctx });
+}
+
+async function handleAgentRuns(request, env) {
+  const user = await currentUser(request, env);
+  if (!user) return json({ error: 'unauthenticated' }, 401);
+  const runs = await listRuns(env, user.email, { limit: 20 });
+  return json({ runs });
+}
+
+async function handleAgentRunLog(request, env, runId) {
+  const user = await currentUser(request, env);
+  if (!user) return json({ error: 'unauthenticated' }, 401);
+  const events = await getRunLog(env, user.email, runId);
+  return json({ runId, events });
+}
+
+// ---------- corpus handlers (Phase 8) ----------
+
+async function handleCorpusList(request, env) {
+  const user = await currentUser(request, env);
+  if (!user) return json({ error: 'unauthenticated' }, 401);
+  const sources = await listSources(env, user.email);
+  return json({ sources });
+}
+
+async function handleCorpusPaste(request, env) {
+  const user = await currentUser(request, env);
+  if (!user) return json({ error: 'unauthenticated' }, 401);
+  let body;
+  try { body = await request.json(); }
+  catch { return json({ error: 'bad_request', message: 'Body must be valid JSON.' }, 400); }
+  const text = String(body?.text || '');
+  if (!text.trim()) return json({ error: 'bad_request', message: '`text` is required.' }, 400);
+  try {
+    const result = await ingestPaste({ email: user.email, text, env });
+    return json({ ok: true, ...result });
+  } catch (err) {
+    console.error('corpus paste failed:', err);
+    return json({ error: 'ingest_failed', message: String(err?.message || err) }, 500);
+  }
+}
+
+async function handleCorpusUrl(request, env) {
+  const user = await currentUser(request, env);
+  if (!user) return json({ error: 'unauthenticated' }, 401);
+  let body;
+  try { body = await request.json(); }
+  catch { return json({ error: 'bad_request', message: 'Body must be valid JSON.' }, 400); }
+  const url = String(body?.url || '').trim();
+  if (!url) return json({ error: 'bad_request', message: '`url` is required.' }, 400);
+  try {
+    const result = await ingestUrl({ email: user.email, url, env });
+    return json({ ok: true, ...result });
+  } catch (err) {
+    console.error('corpus url failed:', err);
+    return json({ error: 'ingest_failed', message: String(err?.message || err) }, 500);
+  }
+}
+
+async function handleCorpusDelete(request, env, sourceId) {
+  const user = await currentUser(request, env);
+  if (!user) return json({ error: 'unauthenticated' }, 401);
+  const ok = await deleteSource(env, user.email, sourceId);
+  if (!ok) return json({ error: 'not_found' }, 404);
+  return json({ ok: true });
 }
 
 // ---------- shared helper: resolve current authed user ----------
@@ -242,19 +420,91 @@ function redirectWithMsg(origin, kind) {
   });
 }
 
-async function handleCartBuild(request, env) {
+// ---------- Google OAuth route handlers (Phase 9) ----------
+
+async function handleGoogleStart(request, env) {
+  const url = new URL(request.url);
+  if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET) {
+    return redirectWithMsg(url.origin, 'oauth_not_configured');
+  }
+  try {
+    const returnTo = url.searchParams.get('return_to') || '/bibas-playground/recipes/';
+    const authUrl = await startGoogleOAuth(env, { origin: url.origin, returnTo });
+    return Response.redirect(authUrl, 302);
+  } catch (err) {
+    console.error('google oauth start failed:', err);
+    return redirectWithMsg(url.origin, 'oauth_start_failed');
+  }
+}
+
+async function handleGoogleCallbackRoute(request, env) {
+  const url = new URL(request.url);
+  if (!env.BIBA_USERS || !env.SESSION_SECRET) {
+    return redirectWithMsg(url.origin, 'misconfigured');
+  }
+  const code = url.searchParams.get('code');
+  const state = url.searchParams.get('state');
+  const errorParam = url.searchParams.get('error');
+  if (errorParam) return redirectWithMsg(url.origin, `google_${errorParam}`);
+
+  try {
+    const { email, returnTo } = await handleGoogleCallback(env, { origin: url.origin, code, state });
+    await ensureUser(env, email);
+
+    const sid = generateSessionId();
+    await putSession(env, sid, email);
+    const secure = url.protocol === 'https:';
+    const cookie = await buildSessionCookie(sid, env.SESSION_SECRET, { secure });
+
+    return new Response(null, {
+      status: 302,
+      headers: {
+        'Location': `${url.origin}${returnTo}`,
+        'Set-Cookie': cookie
+      }
+    });
+  } catch (err) {
+    console.error('google oauth callback failed:', err);
+    return redirectWithMsg(url.origin, 'oauth_callback_failed');
+  }
+}
+
+async function handleCartBuild(request, env, ctx) {
   let body;
   try { body = await request.json(); }
   catch { return json({ error: 'bad_request', message: 'Body must be valid JSON.' }, 400); }
 
-  const { ingredients = [], provider = 'instacart' } = body || {};
+  const { ingredients = [], provider = 'instacart', recipeId, title } = body || {};
   if (!Array.isArray(ingredients) || ingredients.length === 0) {
     return json({ error: 'bad_request', message: 'ingredients must be a non-empty array.' }, 400);
   }
 
   try {
     const result = await buildCart(provider, ingredients, env);
-    // buildCart already includes the actually-used provider id in result.
+
+    // Send-to-cart is the positive implicit signal that replaced the
+    // retired reaction buttons. Best-effort writes to KV (chronological
+    // history) AND Vectorize (semantic memory). Never blocks the response.
+    if (recipeId && title) {
+      const user = await currentUser(request, env).catch(() => null);
+      if (user) {
+        await appendHistory(env, user.email, {
+          recipeId,
+          title,
+          signal: 'sent_to_cart'
+        }).catch(err => console.warn('history append failed:', err));
+
+        if (ctx?.waitUntil) {
+          ctx.waitUntil((async () => {
+            const recipe = await getCachedRecipeById(env, recipeId);
+            if (recipe) {
+              await recordApprovedRecipe(env, { email: user.email, recipe, signal: 'sent_to_cart' });
+            }
+          })());
+        }
+      }
+    }
+
     return json(result);
   } catch (err) {
     console.error('cart build failed:', err);
@@ -262,13 +512,14 @@ async function handleCartBuild(request, env) {
   }
 }
 
-async function handleChat(request, env) {
+async function handleChat(request, env, ctx) {
   // Validate environment early so misconfiguration is obvious.
+  // Gemini is always required (conversational drive + Imagen 3).
+  // The recipe author can be either Claude (default) or Gemini Pro
+  // (when RECIPE_AUTHOR=gemini). recipe-author.js raises if neither
+  // backend is configured, so we only hard-fail on the always-needed key.
   if (!env.GEMINI_API_KEY) {
     return json({ error: 'misconfigured', message: 'GEMINI_API_KEY not set on the Worker.' }, 500);
-  }
-  if (!env.SPOONACULAR_API_KEY) {
-    return json({ error: 'misconfigured', message: 'SPOONACULAR_API_KEY not set on the Worker.' }, 500);
   }
 
   let body;
@@ -306,7 +557,22 @@ async function handleChat(request, env) {
     return json({ error: 'bad_request', message: 'No message text after normalization.' }, 400);
   }
 
-  const system = buildSystemPrompt(preferences, knownRecipes, history);
+  // Phase 7: pull a memory snapshot keyed off the most recent user
+  // message. Authed-only — anonymous users get the same v1 experience.
+  let memorySnapshot = null;
+  const lastUserText = [...messages].reverse().find(m => m.role === 'user')?.text || '';
+  if (user && lastUserText) {
+    memorySnapshot = await getMemorySnapshot(env, { email: user.email, query: lastUserText })
+      .catch(err => { console.warn('memory snapshot failed:', err?.message || err); return null; });
+
+    // Record the user message into the conversations index for future
+    // sessions. Fire-and-forget — never block the response on it.
+    if (ctx?.waitUntil) {
+      ctx.waitUntil(recordMessage(env, { email: user.email, text: lastUserText }));
+    }
+  }
+
+  const system = buildSystemPrompt(preferences, knownRecipes, history, memorySnapshot);
 
   try {
     const { text, toolResults } = await runChat({
@@ -315,22 +581,22 @@ async function handleChat(request, env) {
       contents,
       tools: TOOL_DECLARATIONS,
       env,
-      dispatch
+      dispatch,
+      preferences,
+      executionCtx: ctx,
+      userEmail: user?.email || null
     });
 
-    // Surface the latest tool outputs so the frontend can render cards / approval views
-    // without having to make any of its own API calls.
-    const lastSearch = toolResults
-      .filter(t => t.name === 'search_recipes' && t.result?.recipes)
-      .pop();
-    const lastDetail = toolResults
-      .filter(t => t.name === 'get_recipe_details' && t.result?.recipe)
+    // Phase 6: a single LLM-authored recipe per turn (no list).
+    const lastRecipe = toolResults
+      .filter(t => t.name === 'generate_recipe' && t.result?.recipe)
       .pop();
 
     return json({
       message: { role: 'assistant', text },
-      recipes: lastSearch?.result?.recipes || null,
-      recipeDetail: lastDetail?.result?.recipe || null
+      recipe: lastRecipe?.result?.recipe || null,
+      fromCache: lastRecipe?.result?.fromCache || false,
+      xrefPending: Boolean(lastRecipe?.result?.recipe && !lastRecipe.result.fromCache)
     });
   } catch (err) {
     console.error('chat error:', err);
