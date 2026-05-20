@@ -60,7 +60,8 @@
     display: block;
     margin: 0.5rem 0 0.25rem;
   }
-  .provider-card input {
+  .provider-card input,
+  .provider-card textarea {
     width: 100%;
     box-sizing: border-box;
     padding: 0.6rem 0.7rem;
@@ -68,6 +69,54 @@
     border-radius: 4px;
     font: inherit;
     background: #F2ECDE;
+  }
+  .provider-card textarea {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.78rem;
+    resize: vertical;
+    min-height: 90px;
+  }
+  .field-hint {
+    color: #6a6a6a;
+    font-weight: normal;
+    font-style: italic;
+    text-transform: none;
+    letter-spacing: 0;
+  }
+  .cookie-help {
+    margin: 0.4rem 0 0.5rem;
+    font-size: 0.82rem;
+    color: #4a4a4a;
+  }
+  .cookie-help summary {
+    cursor: pointer;
+    color: #1F4E8C;
+    font-weight: 600;
+  }
+  .cookie-help ol {
+    margin: 0.5rem 0 0.5rem 1.2rem;
+    padding: 0;
+  }
+  .cookie-help li { margin: 0.25rem 0; line-height: 1.4; }
+  .cookie-help code {
+    background: #F2ECDE;
+    padding: 0.05rem 0.3rem;
+    border-radius: 3px;
+    font-size: 0.78rem;
+  }
+  .cookie-help kbd {
+    background: #fff;
+    border: 1px solid #14141440;
+    border-bottom-width: 2px;
+    border-radius: 3px;
+    padding: 0 0.25rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+  }
+  .cookie-help .tip {
+    margin: 0.5rem 0 0;
+    font-style: italic;
+    color: #6a6a6a;
   }
   .consent {
     display: flex;
@@ -243,10 +292,28 @@
               ? `Stored · ${(stored.fields || []).join(' + ')} · updated ${new Date(stored.updatedAt).toLocaleString()}`
               : 'No credentials stored.'}
           </p>
-          <label>Username / email</label>
+          <label>Username / email <span class="field-hint">(optional if cookies provided)</span></label>
           <input name="username" type="text" autocomplete="off" placeholder="${stored ? '(redacted — re-enter to overwrite)' : 'you@example.com'}" />
-          <label>Password</label>
+          <label>Password <span class="field-hint">(optional if cookies provided)</span></label>
           <input name="password" type="password" autocomplete="new-password" placeholder="${stored ? '(redacted — re-enter to overwrite)' : ''}" />
+
+          <label>Session cookies <span class="field-hint">(recommended — bypasses CAPTCHA)</span></label>
+          <textarea name="cookies" rows="4" placeholder='${stored && (stored.fields||[]).includes("cookies") ? "(redacted — re-paste to overwrite)" : `{"_instacart_session_id":"abc123…","csrf_token":"xyz…"}`}'></textarea>
+          <details class="cookie-help">
+            <summary>How to extract session cookies →</summary>
+            <ol>
+              <li>Log into the provider's website in your normal browser (Chrome, Firefox, Safari).</li>
+              <li>Open DevTools (<kbd>⌥⌘I</kbd> on Mac, <kbd>F12</kbd> on Windows) → <strong>Application</strong> tab → <strong>Cookies</strong> in the left sidebar → click the provider's domain.</li>
+              <li>Find the session cookies (Instacart: <code>_instacart_session_id</code>; DoorDash: <code>session_id</code>; Uber Eats: <code>sid</code> and <code>jwt-session</code>; Walmart: <code>auth-cookie</code>). Copy each name + value.</li>
+              <li>Paste as JSON above. Either format works:<br>
+                <strong>Simple map:</strong> <code>{"_instacart_session_id":"abc…","csrf_token":"xyz…"}</code><br>
+                <strong>Array (Puppeteer-native):</strong> <code>[{"name":"_instacart_session_id","value":"abc…","domain":".instacart.com"}]</code>
+              </li>
+              <li>The cookie probably expires in 7–30 days. When the agent says it needs human help, re-extract + re-paste.</li>
+            </ol>
+            <p class="tip">Browser extensions like "Cookie-Editor" can export all cookies for a domain as JSON in one click.</p>
+          </details>
+
           <label class="consent">
             <input type="checkbox" name="consent" />
             I understand the ToS-grey risk and accept it for personal convenience.
@@ -271,9 +338,36 @@
   async function savePair(card, provider, btn) {
     const username = card.querySelector('input[name="username"]').value.trim();
     const password = card.querySelector('input[name="password"]').value;
+    const cookiesRaw = card.querySelector('textarea[name="cookies"]').value.trim();
     const consent  = card.querySelector('input[name="consent"]').checked;
-    if (!username || !password) return toast('Need both username and password.', true);
+
+    let cookies = null;
+    if (cookiesRaw) {
+      try {
+        cookies = JSON.parse(cookiesRaw);
+      } catch {
+        return toast('Cookies field must be valid JSON (array or object).', true);
+      }
+      const valid = Array.isArray(cookies)
+        ? cookies.every(c => c && typeof c.name === 'string' && typeof c.value === 'string')
+        : typeof cookies === 'object' && Object.keys(cookies).length > 0;
+      if (!valid) {
+        return toast('Cookies JSON must be an array of {name,value,…} or a {name: value} object.', true);
+      }
+    }
+
+    // At least one auth surface required: either username+password
+    // OR cookies. Both is fine (cookies preferred at run-time).
+    const hasLogin = username && password;
+    if (!hasLogin && !cookies) {
+      return toast('Need either username + password, or session cookies (preferred).', true);
+    }
     if (!consent) return toast('Tick the consent box first.', true);
+
+    const credentials = {};
+    if (username) credentials.username = username;
+    if (password) credentials.password = password;
+    if (cookies)  credentials.cookies = cookies;
 
     btn.disabled = true;
     const original = btn.textContent;
@@ -282,14 +376,12 @@
       const res = await fetch(`/api/vault/${encodeURIComponent(provider)}`, {
         method: 'PUT',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          consent: true,
-          credentials: { username, password }
-        })
+        body: JSON.stringify({ consent: true, credentials })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.message || `HTTP ${res.status}`);
-      toast(`Stored ${provider} credentials.`);
+      const stored = (data.fields || []).join(' + ');
+      toast(`Stored ${provider} credentials (${stored}).`);
       await loadStatus();
     } catch (err) {
       toast(`Save failed: ${err.message || err}`, true);

@@ -18,26 +18,31 @@ const ANTHROPIC_BETA = 'computer-use-2025-01-24';
 const MODEL = 'claude-sonnet-4-5';
 const MAX_LOOP_ITERATIONS = 25;
 
-export async function runComputerUseLoop({ session, strategy, ingredients, credentials, env, emit }) {
+export async function runComputerUseLoop({ session, strategy, ingredients, credentials, env, emit, preAuthed = false }) {
   const dry = session?.isDry || !env?.ANTHROPIC_API_KEY;
-  if (dry) return runDryLoop({ session, strategy, ingredients, emit });
-  return runLiveLoop({ session, strategy, ingredients, credentials, env, emit });
+  if (dry) return runDryLoop({ session, strategy, ingredients, emit, preAuthed });
+  return runLiveLoop({ session, strategy, ingredients, credentials, env, emit, preAuthed });
 }
 
 // ---------- dry mode ----------
 
-async function runDryLoop({ session, strategy, ingredients, emit }) {
-  await emit('note', { note: `Dry-run mode — no Anthropic / Browser Rendering. Simulating ${strategy.name} cart build.` });
-  await session.open(strategy.startUrl);
-  await emit('screenshot', { hint: 'opened ' + strategy.startUrl });
+async function runDryLoop({ session, strategy, ingredients, emit, preAuthed }) {
+  // Session is already open via the orchestrator (with or without
+  // pre-authed cookies); just simulate the rest.
+  await emit('note', { note: `Dry-run mode — no Anthropic / Browser Rendering. Simulating ${strategy.name} cart build${preAuthed ? ' (pre-authed via cookies)' : ''}.` });
+  await emit('screenshot', { hint: preAuthed ? 'opened authed start page' : 'opened ' + strategy.startUrl });
 
-  await emit('decision', { reasoning: 'Detected login form (simulated)', nextAction: 'fill_login' });
-  await session.click(640, 380);
-  await session.type('***username***');
-  await session.key('Tab');
-  await session.type('***password***');
-  await session.click(640, 460);
-  await emit('action', { action: 'submit_login', args: {}, ok: true });
+  if (!preAuthed) {
+    await emit('decision', { reasoning: 'Detected login form (simulated)', nextAction: 'fill_login' });
+    await session.click(640, 380);
+    await session.type('***username***');
+    await session.key('Tab');
+    await session.type('***password***');
+    await session.click(640, 460);
+    await emit('action', { action: 'submit_login', args: {}, ok: true });
+  } else {
+    await emit('decision', { reasoning: 'Cookies in place — skipping login (simulated)', nextAction: 'search_ingredients' });
+  }
 
   for (const ing of ingredients) {
     await emit('decision', {
@@ -62,13 +67,19 @@ async function runDryLoop({ session, strategy, ingredients, emit }) {
 
 // ---------- live mode ----------
 
-async function runLiveLoop({ session, strategy, ingredients, credentials, env, emit }) {
-  await session.open(strategy.startUrl);
-  await emit('note', { note: `Live run via ${MODEL} + Cloudflare Browser Rendering.` });
+async function runLiveLoop({ session, strategy, ingredients, credentials, env, emit, preAuthed }) {
+  // Session was already opened (and possibly cookie-injected +
+  // navigated) by the orchestrator. We start the loop here.
+  await emit('note', { note: `Live run via ${MODEL} + Cloudflare Browser Rendering${preAuthed ? ' (pre-authed via cookies)' : ''}.` });
 
   const ingredientList = ingredients.map(i => `- ${i.name}`).join('\n');
+  const authedHint = preAuthed
+    ? 'The session is ALREADY LOGGED IN via stored cookies. The browser is on the post-login page. Do NOT try to find a login form. Jump straight to searching for the first ingredient. If you DO see a login form, the cookies expired — emit `needs_human` so the user can refresh them.'
+    : 'Begin at the login page. Use the credential macros below to fill in the form.';
   const systemPrompt = [
     strategy.agentBriefing,
+    '',
+    authedHint,
     '',
     'Ingredients to add to the cart (one match per item):',
     ingredientList,
@@ -78,7 +89,9 @@ async function runLiveLoop({ session, strategy, ingredients, credentials, env, e
     '- `checkout_reached` (custom) when you arrive at the cart-review page. ARGS: { cart_url }. After calling this, STOP.',
     '- `needs_human` (custom) for captcha / 2FA / unexpected blocks. ARGS: { reason }.',
     '',
-    'When typing credentials, you can use the literal macros `${USERNAME}` and `${PASSWORD}` — the worker substitutes them before keystrokes so you never see the plaintext.'
+    preAuthed
+      ? 'Username/password substitution is unavailable in this mode — the session is cookie-authed. Never type credentials.'
+      : 'When typing credentials, you can use the literal macros `${USERNAME}` and `${PASSWORD}` — the worker substitutes them before keystrokes so you never see the plaintext.'
   ].join('\n');
 
   // Bootstrap with a single user-text turn. Claude's first response

@@ -22,9 +22,15 @@ import {
 } from './audit.js';
 
 import instacart from './strategies/instacart.js';
+import ubereats from './strategies/ubereats.js';
+import doordash from './strategies/doordash.js';
+import walmart from './strategies/walmart.js';
 
 const STRATEGIES = {
-  [instacart.id]: instacart
+  [instacart.id]: instacart,
+  [ubereats.id]: ubereats,
+  [doordash.id]: doordash,
+  [walmart.id]: walmart
 };
 
 export function listAgentProviders() {
@@ -76,7 +82,27 @@ export async function runAgentSSE({ email, recipe, providerId, env, ctx }) {
       });
       await send('start', { runId, provider: providerId, recipeTitle: recipe.title });
 
+      // If the vault entry includes session cookies, open the browser
+      // without a startUrl, inject the cookies, and navigate to the
+      // authed start URL. This bypasses the login form — where most
+      // provider CAPTCHAs live — and dramatically improves the
+      // autonomous-completion rate.
       const session = await openBrowserSession(env, { mode: 'auto' });
+      const hasCookies = credentials.cookies &&
+        (Array.isArray(credentials.cookies)
+          ? credentials.cookies.length > 0
+          : Object.keys(credentials.cookies).length > 0);
+
+      if (hasCookies) {
+        await session.open();
+        await session.setCookies(credentials.cookies, strategy.startUrl);
+        const target = strategy.authedStartUrl || strategy.startUrl;
+        await session.navigate(target);
+        await logNote(env, { email, runId, note: `Pre-authed via vault cookies → ${target}` });
+        await send('note', { note: `Pre-authed via vault cookies; skipping login.` });
+      } else {
+        await session.open(strategy.startUrl);
+      }
 
       const result = await runComputerUseLoop({
         session,
@@ -84,6 +110,7 @@ export async function runAgentSSE({ email, recipe, providerId, env, ctx }) {
         ingredients: recipe.ingredients,
         credentials,
         env,
+        preAuthed: hasCookies,
         emit: makeEmit(env, email, runId, send)
       });
 

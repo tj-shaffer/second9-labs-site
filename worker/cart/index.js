@@ -7,8 +7,10 @@
 
 import instacart from './providers/instacart.js';
 import ubereats from './providers/ubereats.js';
+import walmart from './providers/walmart.js';
+import doordash from './providers/doordash.js';
 
-const PROVIDERS = [instacart, ubereats];
+const PROVIDERS = [instacart, ubereats, walmart, doordash];
 const BY_ID = Object.fromEntries(PROVIDERS.map(p => [p.id, p]));
 const DEFAULT_PROVIDER_ID = 'instacart';
 

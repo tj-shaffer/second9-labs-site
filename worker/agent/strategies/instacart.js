@@ -7,8 +7,12 @@
 export default {
   id: 'instacart',
   name: 'Instacart',
-  // The URL the agent navigates to first.
+  // The URL the agent navigates to first when NO cookies are present
+  // — i.e. the agent will try to log in via the username/password
+  // macros. With cookies in the vault, `authedStartUrl` is used and
+  // the login flow is skipped entirely.
   startUrl: 'https://www.instacart.com/login',
+  authedStartUrl: 'https://www.instacart.com/store',
 
   // System prompt fragment appended to the Computer Use prompt so
   // Claude understands the per-provider context.

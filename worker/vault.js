@@ -24,6 +24,21 @@
 //     fields:   string[],      // names of the keys in the encrypted JSON
 //     updatedAt: ms
 //   }
+//
+// Credentials shape (all fields optional — at least one of username
+// or cookies is required for the agent to do anything useful):
+//   {
+//     username?:  string,                      // for fallback login
+//     password?:  string,                      // for fallback login
+//     cookies?:   Cookie[] | Record<string,string>,
+//                                              // pre-authenticated session
+//                                              // see worker/agent/browser.js
+//                                              // for the accepted shapes
+//   }
+// When cookies are present, the agent skips the login flow entirely —
+// dramatically reducing CAPTCHA encounters across all providers. The
+// user logs in once in their real browser per cookie-refresh cycle
+// (typically 7–30 days) and pastes the cookies into vault.html.
 
 const HKDF_INFO = new TextEncoder().encode('biba-playground vault per-user key v1');
 const KEY_LEN_BITS = 256;

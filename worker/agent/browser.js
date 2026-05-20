@@ -49,7 +49,21 @@ class CloudflareSession {
     }
     this.browser = await puppeteer.default.launch(this.env.BROWSER);
     this.page = await this.browser.newPage();
+    // If startUrl is omitted, the caller intends to setCookies() first;
+    // they'll call navigate() explicitly afterward.
     if (startUrl) await this._navigate(startUrl);
+  }
+
+  // Inject session cookies before the first navigation. Accepts the
+  // two formats the vault stores:
+  //   array  — Puppeteer-native [{name, value, domain, path, ...}, ...]
+  //   object — { name: value, ... } map; we derive domain from
+  //            `urlOrDomain` (typically strategy.startUrl).
+  async setCookies(cookies, urlOrDomain) {
+    if (!this.page) throw new Error('setCookies: session not open');
+    const normalized = normalizeCookies(cookies, urlOrDomain);
+    if (normalized.length === 0) return;
+    await this.page.setCookie(...normalized);
   }
 
   async screenshot() {
@@ -98,14 +112,18 @@ class DrySession {
     this.url = 'about:blank';
     this.history = [];
   }
-  async open(startUrl) { this.url = startUrl || this.url; this.history.push(['open', this.url]); }
-  async screenshot()   { this.history.push(['screenshot']); return ONE_PX_PNG_B64; }
-  async navigate(url)  { this.url = url; this.history.push(['navigate', url]); }
-  async click(x, y)    { this.history.push(['click', x, y]); }
-  async type(text)     { this.history.push(['type', text.length + ' chars']); }
-  async key(name)      { this.history.push(['key', name]); }
-  async currentUrl()   { return this.url; }
-  async close()        { this.history.push(['close']); }
+  async open(startUrl)            { this.url = startUrl || this.url; this.history.push(['open', this.url]); }
+  async setCookies(cookies, _ref) {
+    const n = Array.isArray(cookies) ? cookies.length : Object.keys(cookies || {}).length;
+    this.history.push(['setCookies', n]);
+  }
+  async screenshot()              { this.history.push(['screenshot']); return ONE_PX_PNG_B64; }
+  async navigate(url)             { this.url = url; this.history.push(['navigate', url]); }
+  async click(x, y)               { this.history.push(['click', x, y]); }
+  async type(text)                { this.history.push(['type', text.length + ' chars']); }
+  async key(name)                 { this.history.push(['key', name]); }
+  async currentUrl()              { return this.url; }
+  async close()                   { this.history.push(['close']); }
   get isDry() { return true; }
 }
 
@@ -113,4 +131,51 @@ function bytesToB64(bytes) {
   let bin = '';
   for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
   return btoa(bin);
+}
+
+// Normalize the two stored cookie shapes into Puppeteer's
+// page.setCookie(...args) format: an array of objects each with at
+// least { name, value, domain }.
+function normalizeCookies(cookies, urlOrDomain) {
+  if (!cookies) return [];
+  const defaultDomain = deriveDomain(urlOrDomain);
+  if (Array.isArray(cookies)) {
+    return cookies
+      .filter(c => c && c.name && c.value)
+      .map(c => ({
+        name: c.name,
+        value: String(c.value),
+        domain: c.domain || defaultDomain,
+        path: c.path || '/',
+        secure: c.secure ?? true,
+        httpOnly: c.httpOnly ?? false,
+        sameSite: c.sameSite || 'Lax'
+      }));
+  }
+  if (typeof cookies === 'object') {
+    return Object.entries(cookies)
+      .filter(([k, v]) => k && v != null)
+      .map(([name, value]) => ({
+        name,
+        value: String(value),
+        domain: defaultDomain,
+        path: '/',
+        secure: true,
+        sameSite: 'Lax'
+      }));
+  }
+  return [];
+}
+
+function deriveDomain(urlOrDomain) {
+  if (!urlOrDomain) return '';
+  try {
+    const u = new URL(urlOrDomain);
+    // Leading dot lets the cookie apply to subdomains; cleaner default
+    // for sites that have both www and api hostnames.
+    return '.' + u.hostname.replace(/^www\./, '');
+  } catch {
+    // Caller passed a bare domain.
+    return urlOrDomain.startsWith('.') ? urlOrDomain : '.' + urlOrDomain;
+  }
 }
