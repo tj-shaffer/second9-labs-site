@@ -74,26 +74,43 @@ async function runLiveLoop({ session, strategy, ingredients, credentials, env, e
     ingredientList,
     '',
     'Tools you can call:',
-    '- `computer` for click/type/screenshot — drives the browser.',
+    '- `computer` for click/type/screenshot — drives the browser. Start by taking a screenshot to see the page.',
     '- `checkout_reached` (custom) when you arrive at the cart-review page. ARGS: { cart_url }. After calling this, STOP.',
-    '- `needs_human` (custom) for captcha / 2FA / unexpected blocks. ARGS: { reason, screenshot_url? }.'
+    '- `needs_human` (custom) for captcha / 2FA / unexpected blocks. ARGS: { reason }.',
+    '',
+    'When typing credentials, you can use the literal macros `${USERNAME}` and `${PASSWORD}` — the worker substitutes them before keystrokes so you never see the plaintext.'
   ].join('\n');
 
+  // Bootstrap with a single user-text turn. Claude's first response
+  // will request a screenshot via the computer tool; from there it's
+  // a normal tool_use ↔ tool_result loop, one user turn per assistant
+  // turn, each tool_result carrying a fresh screenshot.
   const messages = [{
     role: 'user',
-    content: [{ type: 'text', text: 'Begin. The browser is already open at the login page.' }]
+    content: [{ type: 'text', text: 'Begin. Take a screenshot to see the page, then work through the task.' }]
   }];
 
+  const tools = [
+    {
+      type: 'computer_20250124',
+      name: 'computer',
+      display_width_px: strategy.viewport.width,
+      display_height_px: strategy.viewport.height,
+      display_number: 1
+    },
+    {
+      name: 'checkout_reached',
+      description: 'Call when at the cart review page.',
+      input_schema: { type: 'object', properties: { cart_url: { type: 'string' } }, required: ['cart_url'] }
+    },
+    {
+      name: 'needs_human',
+      description: 'Call when you hit a captcha or 2FA.',
+      input_schema: { type: 'object', properties: { reason: { type: 'string' } }, required: ['reason'] }
+    }
+  ];
+
   for (let i = 0; i < MAX_LOOP_ITERATIONS; i++) {
-    const screenshotB64 = await session.screenshot();
-    await emit('screenshot', { hint: `iter ${i}`, base64: screenshotB64 });
-
-    messages[messages.length - 1].content.push({
-      type: 'tool_result',
-      tool_use_id: `screenshot-${i}`,
-      content: [{ type: 'image', source: { type: 'base64', media_type: 'image/png', data: screenshotB64 } }]
-    });
-
     const res = await fetch(ANTHROPIC_URL, {
       method: 'POST',
       headers: {
@@ -106,11 +123,7 @@ async function runLiveLoop({ session, strategy, ingredients, credentials, env, e
         model: MODEL,
         max_tokens: 1500,
         system: systemPrompt,
-        tools: [
-          { type: 'computer_20250124', name: 'computer', display_width_px: strategy.viewport.width, display_height_px: strategy.viewport.height, display_number: 1 },
-          { name: 'checkout_reached', description: 'Call when at the cart review page.', input_schema: { type: 'object', properties: { cart_url: { type: 'string' } }, required: ['cart_url'] } },
-          { name: 'needs_human', description: 'Call when you hit a captcha or 2FA.', input_schema: { type: 'object', properties: { reason: { type: 'string' } }, required: ['reason'] } }
-        ],
+        tools,
         messages
       })
     });
@@ -121,51 +134,109 @@ async function runLiveLoop({ session, strategy, ingredients, credentials, env, e
     const data = await res.json();
     const blocks = data?.content || [];
 
+    // Always append the assistant turn to the conversation, even
+    // before processing tool calls — this is what makes subsequent
+    // tool_results legal.
+    messages.push({ role: 'assistant', content: blocks });
+
+    // Process every block, building the next user turn's content
+    // (one tool_result per tool_use).
+    const nextUserContent = [];
+    let terminalResult = null;
+
     for (const block of blocks) {
       if (block.type === 'text' && block.text) {
         await emit('decision', { reasoning: block.text, nextAction: null });
       }
-      if (block.type === 'tool_use') {
-        const { name, input } = block;
-        if (name === 'computer') {
-          await dispatchComputerAction(session, input, emit, credentials);
-        } else if (name === 'checkout_reached') {
-          return { status: 'stopped_for_review', cartUrl: input.cart_url, ingredientCount: ingredients.length };
-        } else if (name === 'needs_human') {
-          return { status: 'needs_human', reason: input.reason };
-        }
+      if (block.type !== 'tool_use') continue;
+
+      const { id: toolUseId, name, input } = block;
+
+      if (name === 'checkout_reached') {
+        terminalResult = { status: 'stopped_for_review', cartUrl: input?.cart_url, ingredientCount: ingredients.length };
+        break;
       }
+      if (name === 'needs_human') {
+        terminalResult = { status: 'needs_human', reason: input?.reason };
+        break;
+      }
+      if (name !== 'computer') {
+        nextUserContent.push({ type: 'tool_result', tool_use_id: toolUseId, content: `Unknown tool: ${name}`, is_error: true });
+        continue;
+      }
+
+      // Execute the computer action, capture a fresh screenshot, and
+      // return the screenshot as the tool_result. Anthropic's docs
+      // recommend always returning a post-action screenshot so Claude
+      // can verify the page state.
+      const actionResult = await executeComputerAction(session, input, emit, credentials);
+      let screenshotB64;
+      try {
+        screenshotB64 = await session.screenshot();
+        await emit('screenshot', { hint: `iter ${i} after ${input?.action}`, base64: screenshotB64 });
+      } catch (err) {
+        nextUserContent.push({
+          type: 'tool_result',
+          tool_use_id: toolUseId,
+          content: `Screenshot failed: ${err?.message || err}`,
+          is_error: true
+        });
+        continue;
+      }
+
+      const resultContent = [
+        { type: 'image', source: { type: 'base64', media_type: 'image/png', data: screenshotB64 } }
+      ];
+      if (actionResult.error) {
+        resultContent.push({ type: 'text', text: `Action error: ${actionResult.error}` });
+      }
+      nextUserContent.push({
+        type: 'tool_result',
+        tool_use_id: toolUseId,
+        content: resultContent,
+        is_error: !!actionResult.error
+      });
     }
 
-    messages.push({ role: 'assistant', content: blocks });
-    if (data?.stop_reason === 'end_turn') break;
-    messages.push({ role: 'user', content: [] });
+    if (terminalResult) return terminalResult;
+
+    if (nextUserContent.length === 0) {
+      // No tool calls. If the model is done, exit cleanly; otherwise
+      // nudge with a minimal user turn so the loop can continue.
+      if (data?.stop_reason === 'end_turn') break;
+      messages.push({ role: 'user', content: [{ type: 'text', text: 'Continue.' }] });
+      continue;
+    }
+
+    messages.push({ role: 'user', content: nextUserContent });
   }
 
   return { status: 'retries_exhausted' };
 }
 
-async function dispatchComputerAction(session, input, emit, credentials) {
+async function executeComputerAction(session, input, emit, credentials) {
   const action = input?.action;
   try {
     if (action === 'screenshot') {
-      // no-op — the next iteration starts with a fresh screenshot
-    } else if (action === 'mouse_move') {
-      // pass — Cloudflare Puppeteer doesn't expose mouse move w/o click in this wrapper
+      // Screenshot itself is harmless — the loop always takes one
+      // after every action regardless.
     } else if (action === 'left_click' && Array.isArray(input.coordinate)) {
       await session.click(input.coordinate[0], input.coordinate[1]);
     } else if (action === 'type' && typeof input.text === 'string') {
-      // Replace credential macros so the LLM never sees the cleartext.
       const text = input.text
-        .replace('${USERNAME}', credentials?.username || '')
-        .replace('${PASSWORD}', credentials?.password || '');
+        .replace(/\$\{USERNAME\}/g, credentials?.username || '')
+        .replace(/\$\{PASSWORD\}/g, credentials?.password || '');
       await session.type(text);
     } else if (action === 'key' && typeof input.text === 'string') {
       await session.key(input.text);
     }
+    // mouse_move / cursor_position / etc. fall through as no-ops
     await emit('action', { action, args: redactCreds(input), ok: true });
+    return { ok: true };
   } catch (err) {
-    await emit('action', { action, args: redactCreds(input), ok: false, error: String(err?.message || err) });
+    const errMsg = String(err?.message || err);
+    await emit('action', { action, args: redactCreds(input), ok: false, error: errMsg });
+    return { ok: false, error: errMsg };
   }
 }
 
