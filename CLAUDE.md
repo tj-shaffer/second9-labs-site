@@ -2,26 +2,56 @@
 
 This repo hosts (1) the Second 9 Labs marketing site and (2) **Biba's
 Playground**, an evolving personal-AI project under
-`/bibas-playground/recipes/`. As of the last commit on `kitchen-os`,
-Phases 1–10 of the Kitchen OS arc have shipped.
+`/bibas-playground/recipes/`. As of HEAD on `main`, Phases 1–10 of
+the Kitchen OS arc are **shipped to production**:
+
+- **Production URL:** https://second-9-labs.tj-shaffer.workers.dev
+- **Workers version pinned at write-time:** `9bf28e61-4056-44cb-828e-06a457d7f4e3` (commit `43fdc7e`)
 
 The authoritative roadmap is `~/.claude/plans/what-s-the-scoop-i-silly-kahn.md`.
-Read it first if anything below is ambiguous.
+Read it first if anything below is ambiguous. The session-by-session
+hand-off plan is `~/.claude/plans/continuing-biba-s-playground-binary-tulip.md`.
 
 ## Branches
 
-- **`main`** — v1 (Phases 1–5). Polished demo with Spoonacular-driven
-  recipe chat, magic-link auth, multi-provider grocery hand-off. Treat
-  as a snapshot; do not develop here.
-- **`kitchen-os`** — active development. Phases 6–10 shipped:
-  - 6 — LLM-authored recipes (Claude Opus 4.7 default, Gemini 2.5 Pro
-    fallback) + Imagen 4 photos + R2 cache + 4-DB cross-reference
-  - 7 — Per-user Vectorize memory (conversations, recipes, corpus)
-  - 8 — Personal cookbook ingestion via paste/URL
-  - 9 — Google OAuth primary; magic-link recovery
-  - 10 — Encrypted vault + computer-use agent (Instacart strategy;
-    Uber Eats / Walmart / DoorDash extensible)
-- **`bibas-playground-automated-recipes`** — preserved v1 branch.
+- **`main`** — production. Phases 1–10 shipped. Deploy from here.
+- **`kitchen-os`** — was the staging branch for Phases 6–10; merged
+  into main with the production deploy.
+- **`bibas-playground-automated-recipes`** — preserved v1 branch (snapshot).
+
+## Open debugging thread (active when this doc was last written)
+
+Phase 10's computer-use Instacart agent ships in two paths:
+1. **Login flow** — agent types username/password macros. Hits
+   CAPTCHA on every run because Cloudflare datacenter IPs are flagged.
+2. **Cookie pre-auth flow** — user pastes session cookies into vault;
+   agent skips login. **Currently failing with `needs_human` — Instacart
+   redirects the agent's request to `/login` despite cookies being set.**
+
+Latest diagnostic patch (commit `43fdc7e`) instruments the pre-auth
+path so the next run will emit a `note` event with:
+- `cookies_sent: N`
+- `cookie_names: [...]`
+- `cookie_domains: [...]`
+- `target_url`, `landed_at`, `redirected: boolean`
+
+**Two theories to differentiate via the diagnostic:**
+- Theory 1 — Incomplete cookie jar. User grabbed 1-2 cookies but
+  Instacart needs the full set (session + CSRF + `__cf_bm` + others).
+  Fix: re-export with the Cookie-Editor browser extension.
+- Theory 2 — IP binding. Instacart binds session cookies to the
+  originating residential IP and rejects them from Cloudflare's
+  datacenter IPs. Fix: switch to DoorDash / Uber Eats (less aggressive)
+  or wait for Instacart IDP API approval.
+
+To diagnose, read the most recent run's audit log:
+```sh
+npx wrangler kv key get 'agent:runs:tj.shaffer@secondninelabs.com' \
+  --namespace-id=0db6c3acfbc44876900b37442cf91feb --remote
+# Then for the specific runId:
+npx wrangler kv key get 'agent:log:tj.shaffer@secondninelabs.com:<runId>' \
+  --namespace-id=0db6c3acfbc44876900b37442cf91feb --remote
+```
 
 ## Architecture
 
@@ -36,26 +66,26 @@ under `public/` (set via `assets.directory` in `wrangler.jsonc`).
 | `worker/index.js` | HTTP route table + handler glue |
 | `worker/llm.js` | Gemini conversation drive + system-prompt builder |
 | `worker/tools.js` | Function-call schema + dispatcher (currently one tool: `generate_recipe`) |
-| `worker/recipe-author.js` | Claude Opus 4.7 / Gemini 2.5 Pro recipe author with forced tool-use |
-| `worker/image-gen.js` | Imagen 4 Fast → R2-cached photos |
+| `worker/recipe-author.js` | Claude Opus 4.7 default + Gemini 2.5 Pro fallback (set `RECIPE_AUTHOR=gemini` to force Gemini) |
+| `worker/image-gen.js` | Imagen 4 Fast → R2-cached photos (`imagen-4.0-fast-generate-001`) |
 | `worker/recipe-cache.js` | KV-backed recipe cache (key = `sha256(query+prefs)`) |
 | `worker/cross-reference.js` | Parallel fan-out to four DBs via `ctx.waitUntil` |
-| `worker/db-clients/{spoonacular,edamam,themealdb,tasty}.js` | DB-specific cross-ref clients |
+| `worker/db-clients/{spoonacular,edamam,themealdb,tasty}.js` | DB-specific cross-ref clients (each returns `{source,count,sampleImage}` or null) |
 | `worker/embed.js` | Workers AI bge-base-en-v1.5 wrapper (768d) |
 | `worker/memory.js` | Vectorize wrapper for `MEMORY_{CONVERSATIONS,RECIPES,CORPUS}` |
 | `worker/recipe-dna.js` | Heuristic feature extraction from recipe schema |
 | `worker/ingest.js` | Cookbook ingestion: extract → segment → normalize → embed |
 | `worker/auth.js` | Magic-link tokens + signed-cookie session helpers |
-| `worker/auth-oauth.js` | Google OAuth 2.0 + PKCE flow |
+| `worker/auth-oauth.js` | Google OAuth 2.0 + PKCE flow (needs `GOOGLE_CLIENT_ID`/`SECRET`) |
 | `worker/email.js` | Resend client + magic-link template |
 | `worker/kv.js` | Typed wrappers over `BIBA_USERS` KV namespace |
-| `worker/vault.js` | AES-GCM envelope encryption for grocery-service creds |
-| `worker/agent/index.js` | Computer-use agent orchestrator (SSE) |
-| `worker/agent/browser.js` | Cloudflare Browser Rendering wrapper + DrySession fallback |
-| `worker/agent/computer-use.js` | Claude Computer Use loop + dry-mode equivalent |
+| `worker/vault.js` | AES-GCM envelope encryption for grocery-service creds (username/password/cookies) |
+| `worker/agent/index.js` | Computer-use agent orchestrator (SSE); cookie pre-auth lives here |
+| `worker/agent/browser.js` | Cloudflare Browser Rendering wrapper + DrySession; `setCookies()` returns diagnostic report |
+| `worker/agent/computer-use.js` | Claude Sonnet 4.5 Computer Use loop; correct `tool_use ↔ tool_result` protocol; `preAuthed` flag rewrites system prompt |
 | `worker/agent/audit.js` | KV-backed action log (`agent:log:<email>:<runId>`) |
-| `worker/agent/strategies/instacart.js` | Provider-specific knowledge (startUrl, briefing, cart hints) |
-| `worker/cart/{index.js,utils.js}` + `cart/providers/*.js` | Public search-URL hand-off (v1 fallback) |
+| `worker/agent/strategies/{instacart,ubereats,doordash,walmart}.js` | Provider-specific knowledge — startUrl, authedStartUrl (for cookie path), briefing, viewport, cart hints, ToS-grey consent language |
+| `worker/cart/{index.js,utils.js}` + `cart/providers/{instacart,ubereats,walmart,doordash}.js` | Public search-URL hand-off (Phase 4 fallback for anonymous users / no-vault path) |
 
 ### KV layout — `BIBA_USERS` namespace
 
@@ -73,6 +103,7 @@ recipe:xref:<id>                cross-reference aggregate (30-day TTL)
 oauth:state:<token>             {codeVerifier,returnTo}  (10-min TTL)
 corpus:source:<email>:<srcId>   ingested cookbook source manifest
 vault:<email>:<provider>        {nonce,ct,fields}  AES-GCM ciphertext
+                                fields may include: username, password, cookies
 agent:runs:<email>              [{runId,provider,status,…}]
 agent:log:<email>:<runId>       [{ts,kind,payload}]  (30-day TTL)
 ```
@@ -89,7 +120,35 @@ All 768-dim cosine, metadata index on `email`. Per-user filter
 ### R2 buckets
 
 - `biba-recipe-images` — Imagen-generated photos keyed by
-  `sha256(title|image_prompt)`.
+  `sha256(title|image_prompt)`. Auto-provisioned during first deploy.
+
+### Cloudflare bindings live on prod
+
+- KV namespace: `0db6c3acfbc44876900b37442cf91feb` (`BIBA_USERS`)
+- R2: `biba-recipe-images`
+- Vectorize × 3: `biba-memory-conversations`, `biba-memory-recipes`, `biba-memory-corpus`
+- Workers AI binding (`env.AI`)
+- Browser Rendering binding (`env.BROWSER`) — Workers Paid plan + Browser Rendering enabled
+
+### Production secrets set via `wrangler secret put`
+
+Confirmed live via `wrangler secret list`:
+`ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `SPOONACULAR_API_KEY`,
+`RAPID_API_KEY`, `RESEND_API_KEY`, `EMAIL_FROM`, `SESSION_SECRET`,
+`VAULT_MASTER_KEY` (fresh prod key, **NOT** the local-dev one).
+
+**Not set yet:** `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` — Google
+OAuth UI gracefully degrades to `?error=oauth_not_configured`.
+Magic-link sign in works on prod (Resend domain `secondninelabs.com`
+verified).
+
+**Not set, on purpose:** `EDAMAM_APP_ID`, `EDAMAM_APP_KEY` — user
+skipped Edamam paid signup; cross-ref silently uses 3 of 4 DBs.
+
+**Not set in prod (uses Claude):** `RECIPE_AUTHOR` env var is absent
+in prod → defaults to Claude Opus 4.7 author. Local `.dev.vars` has
+`RECIPE_AUTHOR=gemini` as a leftover from earlier debugging; remove
+to flip local to Claude too.
 
 ## Dev workflow
 
@@ -105,19 +164,25 @@ hot-reload hits a SQLite-lock loop. See
 `.dev.vars` (gitignored) holds local secrets. `.dev.vars.example` is
 checked in as the canonical template.
 
-For prod deploy, every var needs `npx wrangler secret put NAME`.
+### Useful prod read commands (require `wrangler login`)
 
-### External resources to provision (one-time, per environment)
+```sh
+# Last 20 agent runs for the dev user
+npx wrangler kv key get 'agent:runs:tj.shaffer@secondninelabs.com' \
+  --namespace-id=0db6c3acfbc44876900b37442cf91feb --remote
 
-- KV namespace `biba_users` → paste ID into `wrangler.jsonc`
-- R2 bucket `biba-recipe-images`
-- Vectorize indexes `biba-memory-{conversations,recipes,corpus}` (each
-  768d cosine + `email` metadata index)
-- `wrangler login` for Workers AI + Vectorize remote-mode dev access
-- Optional, when going to live computer-use:
-  - Workers Paid plan + Browser Rendering subscription
-  - `BROWSER` binding uncommented in `wrangler.jsonc`
-  - `npm install @cloudflare/puppeteer`
+# Full event log for a specific runId
+npx wrangler kv key get 'agent:log:<email>:<runId>' \
+  --namespace-id=0db6c3acfbc44876900b37442cf91feb --remote
+
+# List all keys with a prefix (vault entries, sessions, etc.)
+npx wrangler kv key list \
+  --namespace-id=0db6c3acfbc44876900b37442cf91feb \
+  --prefix='vault:' --remote
+
+# Tail live Worker logs (90s window suggested)
+npx wrangler tail second-9-labs --format=pretty
+```
 
 ## Conventions
 
@@ -127,11 +192,12 @@ For prod deploy, every var needs `npx wrangler secret put NAME`.
   `public/bibas-playground/recipes/chat.js`, `cookbook.html`,
   `vault.html`. Inline-copy this. Any new HTML-building code on the
   frontend needs it.
-- **Provider abstraction** — `worker/cart/providers/*.js` (search URL
-  hand-off, Phase 4) and `worker/agent/strategies/*.js` (computer-use,
-  Phase 10) are independent layers. New grocery services add to both
-  (search-URL provider for anonymous users; agent strategy for
-  signed-in vault users).
+- **Provider abstraction (two layers)** — `worker/cart/providers/*.js`
+  (search URL hand-off, Phase 4) and `worker/agent/strategies/*.js`
+  (computer-use, Phase 10) are independent. New grocery services
+  drop into both (search-URL provider for anonymous users; agent
+  strategy for signed-in vault users). All four providers exist in
+  both layers as of HEAD.
 - **DB clients** — `worker/db-clients/*.js` all expose
   `crossRef(query, env) → {source, count, sampleImage} | null`.
   Adding a new cross-reference DB is one file plus a line in
@@ -144,6 +210,13 @@ For prod deploy, every var needs `npx wrangler secret put NAME`.
   preferences, executionCtx, userEmail})`** — the conversational
   loop in `llm.js`. `dispatch` receives a `dispatchCtx` with the
   same payload so tool implementations have user context.
+- **Vault credentials shape** — `credentials: { username?, password?, cookies? }`.
+  Cookies preferred (bypass CAPTCHA). Accept two formats: array of
+  Puppeteer-native cookie objects OR `{name: value}` map (domain
+  derived from `strategy.startUrl`).
+- **Agent strategy shape** — `{ id, name, startUrl, authedStartUrl?,
+  agentBriefing, viewport, cartUrlHints, consentLanguage }`. New
+  providers slot in as a ~35-line file in `worker/agent/strategies/`.
 
 ### Decisions baked into the architecture
 
@@ -151,65 +224,80 @@ For prod deploy, every var needs `npx wrangler secret put NAME`.
   Gemini calls. Earlier search+detail tools were retired in Phase 6.
 - **Implicit signals, not reactions** — Phase 6 retired
   `loved/liked/skipped` buttons. Send-to-cart is the positive
-  signal; ask-for-alternatives is the soft negative. Signals
-  surface as `signal: 'sent_to_cart'` entries in
-  `appendHistory()` and Vectorize metadata.
+  signal; ask-for-alternatives is the soft negative.
 - **Memory is authed-only** — anonymous users get the same v1
   experience. Embeddings only land in Vectorize when there's a
   `user.email`.
-- **Dry-run as a first-class mode** — the computer-use agent runs
-  end-to-end (vault decrypt, audit log, SSE) even without paid
-  services. Flipping to live is a config change, not a code change.
+- **Cookie pre-auth bypasses login** — agent first opens browser
+  without navigating, calls `setCookies()`, then navigates to
+  `authedStartUrl`. The `preAuthed: true` flag rewrites the
+  Computer Use system prompt so Claude doesn't look for a login form.
+- **Dry-run as a first-class mode** — without `env.BROWSER` or
+  `env.ANTHROPIC_API_KEY`, the computer-use agent runs in scripted
+  dry mode end-to-end. Useful for testing UI/vault/audit without
+  burning paid services.
 
 ### Anti-patterns to avoid
 
 - **Don't put dev-only secrets in `wrangler.jsonc`.** Use `.dev.vars`
   locally and `wrangler secret put` for prod.
 - **Don't break the prefix on `BIBA_USERS` keys.** The list endpoints
-  (vault status, cookbook sources) rely on these prefixes.
+  (vault status, cookbook sources, agent runs) rely on these prefixes.
 - **Don't add Vectorize bindings without `remote: true`.** Wrangler
   has no local-mode simulation; the binding type errors at boot
   without `remote: true`.
 - **Don't ship code that embeds API keys in the system prompt or
   message history.** The vault exists specifically to keep
-  credentials out of LLM context.
+  credentials out of LLM context. Computer Use uses `${USERNAME}`
+  / `${PASSWORD}` macros that are substituted *after* Claude sees
+  the request.
 - **Don't reintroduce reaction buttons.** Implicit signals are the
   intentional UX choice (see Phase 6 plan rationale).
+- **Don't run `npm audit fix --force`.** It downgrades wrangler 4.x →
+  3.x and breaks Vectorize remote-mode + `--persist-to`. The flagged
+  `ws` CVE is dev-only and not exploitable in our local-only setup.
+- **Don't navigate Puppeteer with `waitUntil: 'networkidle0'`.** SPAs
+  (Instacart, Uber Eats, etc.) never reach idle because of analytics
+  beacons. Use `domcontentloaded` + a settle delay — already done
+  in `worker/agent/browser.js`.
+- **Don't pre-inject tool_results before Claude asks.** Computer Use
+  protocol: assistant emits `tool_use` first, you respond with
+  matching `tool_use_id` in the next user turn. Bootstrap with text
+  only.
 
 ## Where to find things
 
 - **Long-term roadmap + verification scenarios**:
   `~/.claude/plans/what-s-the-scoop-i-silly-kahn.md`
-- **Per-environment provisioning checklist**: this file + `.dev.vars.example`
-- **Live state of TJ's local dev (.dev.vars, Cloudflare account)**:
+- **Hand-off plan for the active task (cookies + multi-provider)**:
+  `~/.claude/plans/continuing-biba-s-playground-binary-tulip.md`
+- **Live state of TJ's local dev + Cloudflare account**:
   the `project_status.md` and `feedback_dev_environment.md` memories
 - **Brand kit + marketing site**: `README.md` (separate from Kitchen
   OS, lives alongside in the same repo)
 - **Deprecated** but historical: `PRD.md` (predates Kitchen OS pivot;
-  v1 architecture only — useful as a reference for v1 surface area)
+  v1 architecture only)
 
-## What's deferred (not "todo" but worth knowing about)
+## What's shipped vs deferred
 
-- **Passkey/WebAuthn** — Phase 9 shipped OAuth but skipped passkey;
-  ~300 lines of CBOR/COSE server parsing for marginal added value
-  given Google OAuth covers the common case. Folder ready: a
-  `worker/auth-passkey.js` slot can drop in.
-- **PDF + image OCR cookbook ingestion** — Phase 8 MVP did paste +
-  URL only. PDF needs pdf.js or similar; image OCR via Workers AI
-  vision models. One extra extractor step in `ingest.js`.
-- **Phase 11 — Proactive scheduling** — cron-triggered emails with
-  tonight's recipe. Needs Workers Paid plan + cron triggers.
-- **Phase 12+ — SMS (Twilio), voice (Web Speech API), MCP server,
-  pantry awareness** — sketched in the plan file.
+| Status | Phase / feature |
+|---|---|
+| ✅ Live prod | 6 (LLM-author recipes), 7 (memory), 8 (cookbook ingestion), 9 (Google OAuth — code wired, awaiting client setup), 10 (vault + computer-use agent) |
+| 🟡 In active debugging | Phase 10 cookie pre-auth — Instacart redirects to login despite cookies set. Diagnostic patch deployed (`43fdc7e`). Awaiting user's next retry. |
+| 🔵 Deferred (intentional) | Phase 9.5 — Passkey/WebAuthn (OAuth covers the case); Phase 8.5 — PDF + image OCR cookbook ingestion |
+| 🟢 Future | Phase 11 — Proactive scheduling (cron-triggered tonight's-dinner email); Phase 12+ — SMS/voice/MCP/pantry-awareness |
 
 ## Quick reference: where to start for common tasks
 
 | Task | Start here |
 |---|---|
-| Add a new grocery service (Uber Eats, Walmart, DoorDash) | `worker/agent/strategies/<provider>.js` + provider entry in `worker/vault.js` `SUPPORTED_PROVIDERS` |
-| Tune the recipe author's tone or constraints | `worker/recipe-author.js` `SYSTEM_PROMPT_BASE` |
+| Add a new grocery service | `worker/agent/strategies/<provider>.js` + `worker/cart/providers/<provider>.js` + add to `SUPPORTED_PROVIDERS` in `worker/vault.js` + register in `worker/agent/index.js` STRATEGIES and `worker/cart/index.js` PROVIDERS |
+| Tune the recipe author's tone | `worker/recipe-author.js` `SYSTEM_PROMPT_BASE` |
 | Tune Gemini's conversational style | `worker/llm.js` `buildSystemPrompt()` |
 | Change what gets remembered | `worker/memory.js` `recordMessage` / `recordApprovedRecipe` |
 | Add a new chat route | `worker/index.js` route table near the top |
 | Adjust frontend recipe card | `public/bibas-playground/recipes/chat.js` `renderRecipeCard` |
+| Tune the agent's per-provider behavior | `worker/agent/strategies/<provider>.js` `agentBriefing` |
+| Debug an agent run | Pull the run from KV: `agent:runs:<email>` + `agent:log:<email>:<runId>` |
 | Update brand colors / fonts | `public/styles.css` (root tokens) + `chat.css` |
+| Flip recipe author Claude ↔ Gemini | `RECIPE_AUTHOR=gemini` env var (set or unset) |
