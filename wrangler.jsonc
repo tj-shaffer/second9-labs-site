@@ -20,7 +20,7 @@
 	"kv_namespaces": [
 		{
 			"binding": "BIBA_USERS",
-			"id": "local-dev-placeholder-replace-before-deploy"
+			"id": "0db6c3acfbc44876900b37442cf91feb"
 		}
 	],
 	// R2 bucket for Imagen-3-generated recipe photos (Phase 6).
