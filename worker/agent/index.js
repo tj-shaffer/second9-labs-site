@@ -95,13 +95,31 @@ export async function runAgentSSE({ email, recipe, providerId, env, ctx }) {
 
       if (hasCookies) {
         await session.open();
-        await session.setCookies(credentials.cookies, strategy.startUrl);
+        const cookieReport = await session.setCookies(credentials.cookies, strategy.startUrl);
         const target = strategy.authedStartUrl || strategy.startUrl;
         await session.navigate(target);
-        await logNote(env, { email, runId, note: `Pre-authed via vault cookies → ${target}` });
-        await send('note', { note: `Pre-authed via vault cookies; skipping login.` });
+
+        // Diagnostic: capture what cookies we sent (names only) and
+        // where we actually landed (Instacart may redirect to /login
+        // if the session is rejected). Both go to audit AND SSE so
+        // the user can see them in the live feed.
+        const landedAt = await session.currentUrl().catch(() => '(unknown)');
+        const diag = {
+          cookies_sent: cookieReport.count,
+          cookie_names: cookieReport.names,
+          cookie_domains: cookieReport.domains,
+          target_url: target,
+          landed_at: landedAt,
+          redirected: landedAt !== target
+        };
+        await logNote(env, { email, runId, note: `Pre-auth diagnostic: ${JSON.stringify(diag)}` });
+        await send('note', {
+          note: `Pre-auth: sent ${diag.cookies_sent} cookies [${diag.cookie_names.join(', ')}] → target ${target} → landed ${landedAt}${diag.redirected ? ' (REDIRECTED — session rejected)' : ' (ok)'}`
+        });
       } else {
         await session.open(strategy.startUrl);
+        const landedAt = await session.currentUrl().catch(() => '(unknown)');
+        await send('note', { note: `No cookies in vault. Opened ${landedAt}.` });
       }
 
       const result = await runComputerUseLoop({

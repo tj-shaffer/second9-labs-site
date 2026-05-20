@@ -59,11 +59,18 @@ class CloudflareSession {
   //   array  — Puppeteer-native [{name, value, domain, path, ...}, ...]
   //   object — { name: value, ... } map; we derive domain from
   //            `urlOrDomain` (typically strategy.startUrl).
+  // Returns { count, names, domains } for diagnostic logging — values
+  // are never returned.
   async setCookies(cookies, urlOrDomain) {
     if (!this.page) throw new Error('setCookies: session not open');
     const normalized = normalizeCookies(cookies, urlOrDomain);
-    if (normalized.length === 0) return;
+    if (normalized.length === 0) return { count: 0, names: [], domains: [] };
     await this.page.setCookie(...normalized);
+    return {
+      count: normalized.length,
+      names: normalized.map(c => c.name),
+      domains: [...new Set(normalized.map(c => c.domain))]
+    };
   }
 
   async screenshot() {
@@ -116,6 +123,8 @@ class DrySession {
   async setCookies(cookies, _ref) {
     const n = Array.isArray(cookies) ? cookies.length : Object.keys(cookies || {}).length;
     this.history.push(['setCookies', n]);
+    const names = Array.isArray(cookies) ? cookies.map(c => c?.name) : Object.keys(cookies || {});
+    return { count: n, names, domains: [] };
   }
   async screenshot()              { this.history.push(['screenshot']); return ONE_PX_PNG_B64; }
   async navigate(url)             { this.url = url; this.history.push(['navigate', url]); }
