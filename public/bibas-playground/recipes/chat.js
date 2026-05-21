@@ -461,9 +461,41 @@
     `).join('');
     const steps = (r.instructions || []).map(s => `<li>${escapeHtml(s)}</li>`).join('');
 
-    const providerId = state.preferences.cartProvider || 'ubereats';
-    const provider = state.cartProviders[providerId] || FALLBACK_PROVIDERS[providerId] || FALLBACK_PROVIDERS.ubereats;
-    const modeNote = MODE_NOTES[provider.mode] || '';
+    const cookieProviders = [];
+    for (const [pid, meta] of Object.entries(state.vaultProviders || {})) {
+      if (Array.isArray(meta?.fields) && meta.fields.includes('cookies')) {
+        const p = state.cartProviders[pid] || FALLBACK_PROVIDERS[pid] || { id: pid, name: pid, mode: 'search' };
+        cookieProviders.push(p);
+      }
+    }
+    cookieProviders.sort((a, b) => {
+      if (a.id === state.preferences.cartProvider) return -1;
+      if (b.id === state.preferences.cartProvider) return 1;
+      return a.name.localeCompare(b.name);
+    });
+
+    const fallbackId = state.preferences.cartProvider || 'ubereats';
+    const fallback = state.cartProviders[fallbackId] || FALLBACK_PROVIDERS[fallbackId] || FALLBACK_PROVIDERS.ubereats;
+
+    let buttonsHtml;
+    let footerNote;
+    if (cookieProviders.length > 0) {
+      buttonsHtml = cookieProviders.map(p => `
+        <button class="send" type="button" data-send-cart="${escapeHtml(r.id)}" data-provider="${escapeHtml(p.id)}">
+          Order via ${escapeHtml(p.name)} →
+        </button>
+      `).join('');
+      footerNote = cookieProviders.length === 1
+        ? `Agent will sign in to ${escapeHtml(cookieProviders[0].name)} with your saved session and load the cart for you.`
+        : `Pick a store — the agent will sign in with your saved session and load the cart for you.`;
+    } else {
+      buttonsHtml = `
+        <button class="send" type="button" data-send-cart="${escapeHtml(r.id)}" data-provider="${escapeHtml(fallback.id)}">
+          Send to ${escapeHtml(fallback.name)} →
+        </button>
+      `;
+      footerNote = MODE_NOTES[fallback.mode] || '';
+    }
 
     const totalMin = r.time?.total_min || 0;
     const servings = r.servings || 0;
@@ -496,10 +528,8 @@
 
         ${steps ? `<h5>Steps</h5><ol class="steps">${steps}</ol>` : ''}
 
-        <button class="send" type="button" data-send-cart="${escapeHtml(r.id)}" data-provider="${escapeHtml(provider.id)}">
-          Send to ${escapeHtml(provider.name)} →
-        </button>
-        <p class="demo-note">${escapeHtml(modeNote)}</p>
+        <div class="send-row">${buttonsHtml}</div>
+        <p class="demo-note">${footerNote}</p>
 
         <div class="approval-foot">
           <button class="chip alt" type="button" data-alternatives="1">Show me a different idea</button>

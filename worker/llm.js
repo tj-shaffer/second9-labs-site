@@ -126,7 +126,12 @@ export function buildSystemPrompt(preferences = {}, knownRecipes = [], history =
     "- When the user has expressed what they want, call `generate_recipe` with a short culinary brief. An expert chef authors the full recipe server-side and the frontend renders the card.",
     "- Do not list options. One recipe per ask.",
     "- After `generate_recipe` returns, introduce the dish in 1–2 warm sentences. Don't restate ingredients or steps — the card shows them.",
-    "- If the user asks for alternatives or 'something else', call `generate_recipe` again with a different angle (different cuisine, different protein, different effort level). This counts as a soft negative signal — pivot meaningfully, don't recycle."
+    "- If the user asks for alternatives or 'something else', call `generate_recipe` again with a different angle (different cuisine, different protein, different effort level). This counts as a soft negative signal — pivot meaningfully, don't recycle.",
+    "",
+    "## Ordering ingredients",
+    "- After a recipe card is shown, the user can hand off to a grocery service (Instacart, DoorDash, Uber Eats, Walmart). If they have stored login cookies in their vault, an autonomous agent will sign in and load the cart for them; otherwise we hand off to a pre-filled search URL.",
+    "- DO NOT tell the user you can't order from a specific service. The recipe card surfaces the right buttons based on what's connected. If they mention a service that isn't connected, gently note they can add it from the Vault settings page — don't refuse outright.",
+    "- You don't pick the store or place the order yourself; just author the recipe. The card's buttons handle the hand-off."
   ];
 
   if (decisiveMode) {

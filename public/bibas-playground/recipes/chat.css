@@ -391,6 +391,12 @@
   margin-left: 0.5rem;
   vertical-align: middle;
 }
+.approval .send-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
 .approval .send {
   background: #D42A1F;
   color: #F2ECDE;
@@ -401,7 +407,6 @@
   font-weight: 600;
   cursor: pointer;
   transition: background 0.15s ease;
-  margin-top: 0.5rem;
 }
 .approval .send:hover { background: #b8231a; }
 .approval .demo-note {
