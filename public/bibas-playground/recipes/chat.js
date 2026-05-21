@@ -22,12 +22,12 @@
     diet: [],
     intolerances: [],
     dislikes: '',
-    cartProvider: 'instacart'
+    cartProvider: 'ubereats'
   };
 
   const FALLBACK_PROVIDERS = {
-    instacart: { id: 'instacart', name: 'Instacart', mode: 'search' },
-    ubereats: { id: 'ubereats', name: 'Uber Eats', mode: 'search' }
+    ubereats: { id: 'ubereats', name: 'Uber Eats', mode: 'search' },
+    instacart: { id: 'instacart', name: 'Instacart', mode: 'search' }
   };
 
   const MODE_NOTES = {
@@ -47,18 +47,9 @@
     }
   }
 
-  const GUIDED = {
-    mood:   { prompt: "How are you feeling tonight?", chips: ['Cozy', 'Energized', 'Light & fresh', 'A little fancy'] },
-    time:   { prompt: "How much time have you got?", chips: ['15 min', '30 min', '45 min', 'No rush'] },
-    effort: { prompt: "How much cooking energy?", chips: ['Minimal', 'A little', "I'll commit"] }
-  };
-
   // ---------- state ----------
   let state = {
-    view: 'welcome',
-    path: null,
     messages: [],
-    guided: { step: null, answers: {} },
     recipesById: {},  // id -> full authored recipe (for cart hand-off + xref poll)
     cartProviders: { ...FALLBACK_PROVIDERS },
     preferences: loadPreferences(),
@@ -101,11 +92,6 @@
   }
   checkAuth();
 
-  function render() {
-    if (state.view === 'welcome') return renderWelcome();
-    renderChat();
-  }
-
   function chromeHtml() {
     if (state.auth.email) {
       const initials = state.auth.email.slice(0, 1).toUpperCase();
@@ -124,41 +110,13 @@
     `;
   }
 
-  function renderAuthChrome() { render(); }
-
-  function renderWelcome() {
-    root.innerHTML = `
-      ${chromeHtml()}
-      <section class="welcome">
-        <p class="eyebrow">Biba's Playground</p>
-        <h1>What's <em>for dinner?</em></h1>
-        <p class="lede">Tell me what you're craving, or let me ask a couple of questions and we'll figure it out together. An expert AI chef writes the recipe, I generate the photo, and I (eventually) drop the groceries into your Instacart cart.</p>
-
-        <div class="doors">
-          <button class="door" data-path="free">
-            <span class="door-tag">Free chat</span>
-            <h3>Tell me what you're craving</h3>
-            <p>Just type — "something cozy", "Sichuan chicken with cumin oil", "no-cook summer dinner". I'll author one for you.</p>
-          </button>
-          <button class="door" data-path="guided">
-            <span class="door-tag">Three questions</span>
-            <h3>Help me decide</h3>
-            <p>A short little wizard for when nothing sounds good. We'll narrow it down together.</p>
-          </button>
-        </div>
-      </section>
-    `;
-    root.querySelectorAll('.door').forEach(btn => {
-      btn.addEventListener('click', () => startPath(btn.dataset.path));
-    });
-    bindChromeHandlers();
-  }
+  function renderAuthChrome() { renderChat(); }
 
   function renderChat() {
     root.innerHTML = `
       ${chromeHtml()}
       <div class="chat-head">
-        <h2>${state.path === 'guided' ? 'A few quick questions' : "Let's cook something"}</h2>
+        <h2>Let's cook something</h2>
         <button class="reset" type="button">↺ Start over</button>
       </div>
 
@@ -167,7 +125,7 @@
       <form class="composer" id="composer" autocomplete="off">
         <textarea
           id="composer-input"
-          placeholder="${state.path === 'guided' && state.guided.step ? 'Tap a chip above, or type your own…' : "Tell me what you're in the mood for…"}"
+          placeholder="Tell me what you're in the mood for…"
           rows="1"
         ></textarea>
         <button type="submit" id="composer-send">Send</button>
@@ -226,11 +184,6 @@
     input.addEventListener('input', () => autoGrow(input));
 
     document.getElementById('messages').addEventListener('click', (e) => {
-      const chip = e.target.closest('.chip[data-chip]');
-      if (chip) {
-        handleChip(chip.dataset.chip, chip.dataset.context);
-        return;
-      }
       const alt = e.target.closest('[data-alternatives]');
       if (alt) {
         handleUserText('Show me a different idea, please.');
@@ -260,73 +213,21 @@
     el.style.height = Math.min(el.scrollHeight, 128) + 'px';
   }
 
-  function startPath(path) {
-    state.view = 'chat';
-    state.path = path;
-    state.messages = [];
-    state.guided = { step: null, answers: {} };
-
-    if (path === 'free') {
-      const greeting = "Hi! Tell me what you're in the mood for — vibe, time, a specific dish, anything goes. I'll write you one real recipe and generate a photo of it.";
-      addAssistantHtml(`<p>${escapeHtml(greeting)}</p>`, greeting);
-    } else {
-      state.guided.step = 'mood';
-      const intro = "Lovely. Three quick questions and I'll author something for you.";
-      addAssistantHtml(`<p>${escapeHtml(intro)}</p>` + askGuided('mood'), intro);
-    }
-    render();
+  function startChat() {
+    renderChat();
+    const greeting = "Hi! Tell me what you're in the mood for — vibe, time, a specific dish, anything goes. I'll write you one real recipe and generate a photo of it.";
+    addAssistantHtml(`<p>${escapeHtml(greeting)}</p>`, greeting);
   }
 
   async function handleUserText(text) {
     addUser(text);
-    if (state.path === 'guided' && state.guided.step) {
-      return handleGuidedAnswer(text);
-    }
     await callChatAndRender();
-  }
-
-  function handleChip(value, context) {
-    addUser(value);
-    if (context === 'guided') handleGuidedAnswer(value);
-  }
-
-  function handleGuidedAnswer(value) {
-    const step = state.guided.step;
-    if (!step) return;
-    state.guided.answers[step] = value;
-
-    const order = ['mood', 'time', 'effort'];
-    const next = order[order.indexOf(step) + 1];
-
-    if (next) {
-      state.guided.step = next;
-      const q = GUIDED[next];
-      addAssistantHtml(`<p>${escapeHtml(q.prompt)}</p>` + askGuided(next), q.prompt);
-    } else {
-      state.guided.step = null;
-      const a = state.guided.answers;
-      const synthesized =
-        `I'm feeling ${(a.mood || 'open').toLowerCase()}, ` +
-        `I've got about ${(a.time || 'a moderate amount of time').toLowerCase()}, ` +
-        `and I want ${(a.effort || 'a normal amount').toLowerCase()} of cooking energy. ` +
-        `Author one recipe for me.`;
-      addUser(synthesized, /*hidden=*/ true);
-      callChatAndRender();
-    }
-  }
-
-  function askGuided(step) {
-    const q = GUIDED[step];
-    const chipsHtml = q.chips.map(c =>
-      `<button class="chip" type="button" data-chip="${escapeHtml(c)}" data-context="guided">${escapeHtml(c)}</button>`
-    ).join('');
-    return `<div class="chips">${chipsHtml}</div>`;
   }
 
   // ---------- cart hand-off ----------
   async function sendToCart(buttonEl) {
     const recipeId = buttonEl.dataset.sendCart;
-    const providerId = buttonEl.dataset.provider || state.preferences.cartProvider || 'instacart';
+    const providerId = buttonEl.dataset.provider || state.preferences.cartProvider || 'ubereats';
 
     const recipe = state.recipesById[String(recipeId)];
     const ingredients = recipe?.ingredients;
@@ -447,8 +348,9 @@
           else if (event === 'error') pushLine('error', data.message);
           else if (event === 'done') {
             const r = data.result || {};
+            const providerName = state.cartProviders[providerId]?.name || providerId;
             pushLine('done', r.status === 'stopped_for_review'
-              ? `Cart ready · ${r.ingredientCount || 0} items · ${r.dryRun ? '(DRY RUN — no real browser)' : 'open Instacart to review + checkout'}`
+              ? `Cart ready · ${r.ingredientCount || 0} items · ${r.dryRun ? '(DRY RUN — no real browser)' : `open ${providerName} to review + checkout`}`
               : `status=${r.status}${r.reason ? ' · ' + r.reason : ''}`);
             if (r.cartUrl && !r.dryRun) {
               const f = feed();
@@ -559,8 +461,8 @@
     `).join('');
     const steps = (r.instructions || []).map(s => `<li>${escapeHtml(s)}</li>`).join('');
 
-    const providerId = state.preferences.cartProvider || 'instacart';
-    const provider = state.cartProviders[providerId] || FALLBACK_PROVIDERS[providerId] || FALLBACK_PROVIDERS.instacart;
+    const providerId = state.preferences.cartProvider || 'ubereats';
+    const provider = state.cartProviders[providerId] || FALLBACK_PROVIDERS[providerId] || FALLBACK_PROVIDERS.ubereats;
     const modeNote = MODE_NOTES[provider.mode] || '';
 
     const totalMin = r.time?.total_min || 0;
@@ -663,17 +565,15 @@
 
   function resetAll() {
     state = {
-      view: 'welcome',
-      path: null,
       messages: [],
-      guided: { step: null, answers: {} },
       recipesById: {},
       cartProviders: state.cartProviders,
       preferences: loadPreferences(),
-      auth: state.auth
+      auth: state.auth,
+      vaultProviders: state.vaultProviders
     };
-    render();
+    startChat();
   }
 
-  render();
+  startChat();
 })();

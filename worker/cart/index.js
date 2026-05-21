@@ -10,9 +10,9 @@ import ubereats from './providers/ubereats.js';
 import walmart from './providers/walmart.js';
 import doordash from './providers/doordash.js';
 
-const PROVIDERS = [instacart, ubereats, walmart, doordash];
+const PROVIDERS = [ubereats, instacart, walmart, doordash];
 const BY_ID = Object.fromEntries(PROVIDERS.map(p => [p.id, p]));
-const DEFAULT_PROVIDER_ID = 'instacart';
+const DEFAULT_PROVIDER_ID = 'ubereats';
 
 // Public summary used by /api/cart/providers and by the frontend's settings page.
 export function listProviders() {

@@ -326,7 +326,7 @@
       <div class="number-row">
         <label for="cart-provider">Preferred service</label>
         <select id="cart-provider" style="font:inherit; padding:0.5rem 0.6rem; border:1.5px solid #141414; border-radius:6px; background:#fff; min-width:12rem;">
-          <option value="instacart">Instacart</option>
+          <option value="ubereats">Uber Eats</option>
         </select>
       </div>
       <p class="hint" id="provider-mode-note" style="margin-top:0.5rem;"></p>
@@ -368,7 +368,7 @@
     diet: [],
     intolerances: [],
     dislikes: '',
-    cartProvider: 'instacart',
+    cartProvider: 'ubereats',
     decisiveMode: false
   };
   // Set to the user's email if signed in; null otherwise. Drives "anonymous"/"signed in" UX.
@@ -413,7 +413,7 @@
 
     const select = document.getElementById('cart-provider');
     if (select) {
-      const wanted = prefs.cartProvider || 'instacart';
+      const wanted = prefs.cartProvider || 'ubereats';
       // Only set if the option exists (providers may not be loaded yet)
       if ([...select.options].some(o => o.value === wanted)) {
         select.value = wanted;
@@ -432,7 +432,7 @@
       diet: Array.from(document.querySelectorAll('input[name="diet"]:checked')).map(el => el.value),
       intolerances: Array.from(document.querySelectorAll('input[name="intolerances"]:checked')).map(el => el.value),
       dislikes: document.getElementById('dislikes').value.trim(),
-      cartProvider: (select && select.value) || 'instacart'
+      cartProvider: (select && select.value) || 'ubereats'
     };
   }
 

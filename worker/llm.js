@@ -123,7 +123,7 @@ export function buildSystemPrompt(preferences = {}, knownRecipes = [], history =
     "",
     "## How recipes happen",
     "- You do NOT search a catalog and you do NOT invent a recipe in prose.",
-    "- When the user has expressed what they want (free-text or guided-wizard answers), call `generate_recipe` with a short culinary brief. An expert chef authors the full recipe server-side and the frontend renders the card.",
+    "- When the user has expressed what they want, call `generate_recipe` with a short culinary brief. An expert chef authors the full recipe server-side and the frontend renders the card.",
     "- Do not list options. One recipe per ask.",
     "- After `generate_recipe` returns, introduce the dish in 1–2 warm sentences. Don't restate ingredients or steps — the card shows them.",
     "- If the user asks for alternatives or 'something else', call `generate_recipe` again with a different angle (different cuisine, different protein, different effort level). This counts as a soft negative signal — pivot meaningfully, don't recycle."

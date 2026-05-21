@@ -19,7 +19,7 @@ export const TOOL_DECLARATIONS = [
     description:
       "Generate one complete recipe matching the user's request. " +
       'Always call this when the user expresses what they want to cook ' +
-      '(free-text, guided-wizard answers, or "make me something"). ' +
+      '(free-text like "make me something cozy", a specific dish, a vibe). ' +
       'You are not searching a catalog — a separate expert chef authors the recipe.',
     parameters: {
       type: 'object',

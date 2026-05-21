@@ -204,7 +204,7 @@ async function handleAgentRun(request, env, ctx) {
   try { body = await request.json(); }
   catch { return json({ error: 'bad_request', message: 'Body must be valid JSON.' }, 400); }
 
-  const { recipeId, providerId = 'instacart' } = body || {};
+  const { recipeId, providerId = 'ubereats' } = body || {};
   if (!recipeId) return json({ error: 'bad_request', message: '`recipeId` required.' }, 400);
 
   const recipe = await getCachedRecipeById(env, recipeId);
@@ -474,7 +474,7 @@ async function handleCartBuild(request, env, ctx) {
   try { body = await request.json(); }
   catch { return json({ error: 'bad_request', message: 'Body must be valid JSON.' }, 400); }
 
-  const { ingredients = [], provider = 'instacart', recipeId, title } = body || {};
+  const { ingredients = [], provider = 'ubereats', recipeId, title } = body || {};
   if (!Array.isArray(ingredients) || ingredients.length === 0) {
     return json({ error: 'bad_request', message: 'ingredients must be a non-empty array.' }, 400);
   }

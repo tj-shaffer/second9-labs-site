@@ -66,7 +66,7 @@ const DEFAULT_PROFILE_PREFS = {
   diet: [],
   intolerances: [],
   dislikes: '',
-  cartProvider: 'instacart',
+  cartProvider: 'ubereats',
   decisiveMode: false
 };
 
