@@ -63,14 +63,5 @@
 			"index_name": "biba-memory-corpus",
 			"remote": true
 		}
-	],
-	// Phase 10 — Browser Rendering binding for the computer-use agent.
-	// worker/agent/browser.js dynamically imports @cloudflare/puppeteer
-	// and drives real headless Chromium against provider UIs (Instacart
-	// today; Uber Eats / Walmart / DoorDash extensible via strategy
-	// files). When this binding is absent the agent falls back to its
-	// in-memory DrySession stub.
-	"browser": {
-		"binding": "BROWSER"
-	}
+	]
 }

@@ -15,15 +15,6 @@ import { getCachedRecipeById } from './recipe-cache.js';
 import { ingestPaste, ingestUrl, listSources, deleteSource } from './ingest.js';
 import { startGoogleOAuth, handleGoogleCallback } from './auth-oauth.js';
 import {
-  storeCredentials,
-  loadCredentials,
-  deleteCredentials,
-  getVaultStatus,
-  listSupportedProviders
-} from './vault.js';
-import { runAgentSSE, listAgentProviders } from './agent/index.js';
-import { listRuns, getRunLog } from './agent/audit.js';
-import {
   generateMagicToken,
   generateSessionId,
   buildSessionCookie,
@@ -66,7 +57,7 @@ export default {
     }
 
     if (path === '/api/cart/providers' && request.method === 'GET') {
-      return json({ providers: listProviders() });
+      return json({ providers: listProviders(env) });
     }
 
     if (path === '/api/cart/build' && request.method === 'POST') {
@@ -116,116 +107,9 @@ export default {
       return handleCorpusDelete(request, env, sourceId);
     }
 
-    // ---- Phase 10: vault + agent routes ----
-    if (path === '/api/vault/providers' && request.method === 'GET') {
-      return json({ providers: listSupportedProviders() });
-    }
-    if (path === '/api/vault/status' && request.method === 'GET') {
-      return handleVaultStatus(request, env);
-    }
-    if (path.startsWith('/api/vault/') && request.method === 'PUT') {
-      const provider = decodeURIComponent(path.slice('/api/vault/'.length));
-      return handleVaultPut(request, env, provider);
-    }
-    if (path.startsWith('/api/vault/') && request.method === 'DELETE') {
-      const provider = decodeURIComponent(path.slice('/api/vault/'.length));
-      return handleVaultDelete(request, env, provider);
-    }
-    if (path === '/api/agent/providers' && request.method === 'GET') {
-      return json({ providers: listAgentProviders() });
-    }
-    if (path === '/api/agent/run' && request.method === 'POST') {
-      return handleAgentRun(request, env, ctx);
-    }
-    if (path === '/api/agent/runs' && request.method === 'GET') {
-      return handleAgentRuns(request, env);
-    }
-    if (path.startsWith('/api/agent/runs/') && request.method === 'GET') {
-      const runId = decodeURIComponent(path.slice('/api/agent/runs/'.length));
-      return handleAgentRunLog(request, env, runId);
-    }
-
     return json({ error: 'not_found', path }, 404);
   }
 };
-
-// ---------- vault handlers (Phase 10) ----------
-
-async function handleVaultStatus(request, env) {
-  const user = await currentUser(request, env);
-  if (!user) return json({ error: 'unauthenticated' }, 401);
-  if (!env.VAULT_MASTER_KEY) return json({ configured: false, vaults: {} });
-  const vaults = await getVaultStatus(env, { email: user.email });
-  return json({ configured: true, vaults });
-}
-
-async function handleVaultPut(request, env, provider) {
-  const user = await currentUser(request, env);
-  if (!user) return json({ error: 'unauthenticated' }, 401);
-  if (!env.VAULT_MASTER_KEY) return json({ error: 'vault_not_configured', message: 'VAULT_MASTER_KEY not set on the Worker.' }, 500);
-
-  let body;
-  try { body = await request.json(); }
-  catch { return json({ error: 'bad_request', message: 'Body must be valid JSON.' }, 400); }
-  if (!body?.consent) return json({ error: 'consent_required', message: 'Must accept the ToS-grey disclosure.' }, 400);
-
-  const credentials = body?.credentials;
-  if (!credentials || typeof credentials !== 'object') {
-    return json({ error: 'bad_request', message: '`credentials` object required.' }, 400);
-  }
-
-  try {
-    const result = await storeCredentials(env, { email: user.email, provider, credentials });
-    return json({ ok: true, ...result });
-  } catch (err) {
-    console.error('vault put failed:', err);
-    return json({ error: 'vault_failed', message: String(err?.message || err) }, 500);
-  }
-}
-
-async function handleVaultDelete(request, env, provider) {
-  const user = await currentUser(request, env);
-  if (!user) return json({ error: 'unauthenticated' }, 401);
-  try {
-    await deleteCredentials(env, { email: user.email, provider });
-    return json({ ok: true });
-  } catch (err) {
-    return json({ error: 'vault_failed', message: String(err?.message || err) }, 500);
-  }
-}
-
-// ---------- agent handlers (Phase 10) ----------
-
-async function handleAgentRun(request, env, ctx) {
-  const user = await currentUser(request, env);
-  if (!user) return json({ error: 'unauthenticated' }, 401);
-
-  let body;
-  try { body = await request.json(); }
-  catch { return json({ error: 'bad_request', message: 'Body must be valid JSON.' }, 400); }
-
-  const { recipeId, providerId = 'ubereats' } = body || {};
-  if (!recipeId) return json({ error: 'bad_request', message: '`recipeId` required.' }, 400);
-
-  const recipe = await getCachedRecipeById(env, recipeId);
-  if (!recipe) return json({ error: 'recipe_not_found', message: 'Recipe not found in cache. Re-generate it first.' }, 404);
-
-  return runAgentSSE({ email: user.email, recipe, providerId, env, ctx });
-}
-
-async function handleAgentRuns(request, env) {
-  const user = await currentUser(request, env);
-  if (!user) return json({ error: 'unauthenticated' }, 401);
-  const runs = await listRuns(env, user.email, { limit: 20 });
-  return json({ runs });
-}
-
-async function handleAgentRunLog(request, env, runId) {
-  const user = await currentUser(request, env);
-  if (!user) return json({ error: 'unauthenticated' }, 401);
-  const events = await getRunLog(env, user.email, runId);
-  return json({ runId, events });
-}
 
 // ---------- corpus handlers (Phase 8) ----------
 
@@ -474,34 +358,38 @@ async function handleCartBuild(request, env, ctx) {
   try { body = await request.json(); }
   catch { return json({ error: 'bad_request', message: 'Body must be valid JSON.' }, 400); }
 
-  const { ingredients = [], provider = 'ubereats', recipeId, title } = body || {};
-  if (!Array.isArray(ingredients) || ingredients.length === 0) {
-    return json({ error: 'bad_request', message: 'ingredients must be a non-empty array.' }, 400);
+  const { provider = 'instacart', recipeId, preferences = {} } = body || {};
+  if (!recipeId) {
+    return json({ error: 'bad_request', message: '`recipeId` required.' }, 400);
   }
 
+  const recipe = await getCachedRecipeById(env, recipeId);
+  if (!recipe) {
+    return json({ error: 'recipe_not_found', message: 'Recipe not found in cache. Re-generate it first.' }, 404);
+  }
+
+  const origin = new URL(request.url).origin;
+  const partnerLinkbackUrl = `${origin}/bibas-playground/recipes/`;
+
   try {
-    const result = await buildCart(provider, ingredients, env);
+    const result = await buildCart(provider, recipe, env, { preferences, partnerLinkbackUrl });
 
     // Send-to-cart is the positive implicit signal that replaced the
     // retired reaction buttons. Best-effort writes to KV (chronological
     // history) AND Vectorize (semantic memory). Never blocks the response.
-    if (recipeId && title) {
-      const user = await currentUser(request, env).catch(() => null);
-      if (user) {
-        await appendHistory(env, user.email, {
-          recipeId,
-          title,
-          signal: 'sent_to_cart'
-        }).catch(err => console.warn('history append failed:', err));
+    const user = await currentUser(request, env).catch(() => null);
+    if (user) {
+      await appendHistory(env, user.email, {
+        recipeId,
+        title: recipe.title,
+        signal: 'sent_to_cart'
+      }).catch(err => console.warn('history append failed:', err));
 
-        if (ctx?.waitUntil) {
-          ctx.waitUntil((async () => {
-            const recipe = await getCachedRecipeById(env, recipeId);
-            if (recipe) {
-              await recordApprovedRecipe(env, { email: user.email, recipe, signal: 'sent_to_cart' });
-            }
-          })());
-        }
+      if (ctx?.waitUntil) {
+        ctx.waitUntil(
+          recordApprovedRecipe(env, { email: user.email, recipe, signal: 'sent_to_cart' })
+            .catch(err => console.warn('memory record failed:', err))
+        );
       }
     }
 

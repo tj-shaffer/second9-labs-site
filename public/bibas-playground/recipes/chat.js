@@ -21,19 +21,14 @@
     householdSize: 2,
     diet: [],
     intolerances: [],
-    dislikes: '',
-    cartProvider: 'ubereats'
+    dislikes: ''
   };
 
+  // Default-available provider before /api/cart/providers resolves. Overwritten
+  // by the actual server-authoritative list (which filters to providers whose
+  // API key secret is set on the Worker).
   const FALLBACK_PROVIDERS = {
-    ubereats: { id: 'ubereats', name: 'Uber Eats', mode: 'search' },
-    instacart: { id: 'instacart', name: 'Instacart', mode: 'search' }
-  };
-
-  const MODE_NOTES = {
-    cart: 'Cart pre-loaded — pick a store and check out.',
-    search: "We've pre-searched these ingredients for you — tap each to add it.",
-    browse: "Opens the grocery section. You'll need to search manually."
+    instacart: { id: 'instacart', name: 'Instacart', mode: 'cart' }
   };
 
   function loadPreferences() {
@@ -53,8 +48,7 @@
     recipesById: {},  // id -> full authored recipe (for cart hand-off + xref poll)
     cartProviders: { ...FALLBACK_PROVIDERS },
     preferences: loadPreferences(),
-    auth: { email: null, historyCount: 0 },
-    vaultProviders: {}  // Phase 10: which providers have stored creds
+    auth: { email: null, historyCount: 0 }
   };
 
   fetch('/api/cart/providers').then(r => r.ok ? r.json() : null).then(data => {
@@ -79,12 +73,6 @@
       if (data.preferences && typeof data.preferences === 'object') {
         state.preferences = { ...DEFAULT_PREFS, ...state.preferences, ...data.preferences };
       }
-      // Phase 10: load vault status so the Send button can switch into
-      // "Run agent" mode when the user has stored creds for the
-      // chosen provider.
-      fetch('/api/vault/status')
-        .then(r => r.ok ? r.json() : null)
-        .then(v => { if (v?.vaults) state.vaultProviders = v.vaults; });
       renderAuthChrome();
     } catch (err) {
       console.warn('chat.js: /api/profile fetch failed', err);
@@ -227,38 +215,30 @@
   // ---------- cart hand-off ----------
   async function sendToCart(buttonEl) {
     const recipeId = buttonEl.dataset.sendCart;
-    const providerId = buttonEl.dataset.provider || state.preferences.cartProvider || 'ubereats';
+    const providerId = buttonEl.dataset.provider;
 
     const recipe = state.recipesById[String(recipeId)];
-    const ingredients = recipe?.ingredients;
-    if (!ingredients || ingredients.length === 0) {
+    if (!recipe) {
       addAssistantHtml(
-        `<p>I lost track of this recipe's ingredients — try asking for a new one.</p>`,
-        "I lost track of this recipe's ingredients."
+        `<p>I lost track of this recipe — try asking for a new one.</p>`,
+        "I lost track of this recipe."
       );
       return;
     }
 
-    // Phase 10: if the user is signed in AND has vaulted creds for the
-    // chosen provider, kick off the autonomous agent instead of the
-    // public-search hand-off.
-    if (state.auth.email && state.vaultProviders[providerId]) {
-      return runAgentForRecipe(buttonEl, recipeId, providerId);
-    }
-
+    const providerName = state.cartProviders[providerId]?.name || providerId;
     const originalText = buttonEl.textContent;
     buttonEl.disabled = true;
-    buttonEl.textContent = 'Opening…';
+    buttonEl.textContent = 'Building cart…';
 
     try {
       const res = await fetch('/api/cart/build', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          ingredients: ingredients.map(i => ({ name: i.name, qty: i.qty, unit: i.unit })),
           provider: providerId,
           recipeId,
-          title: recipe.title
+          preferences: state.preferences
         })
       });
       if (!res.ok) {
@@ -272,105 +252,17 @@
       if (!opened) {
         addAssistantHtml(
           `<p>Your browser blocked the new tab. Open it manually: ` +
-          `<a href="${escapeHtml(data.url)}" target="_blank" rel="noopener">${escapeHtml(state.cartProviders[providerId]?.name || 'Open cart')} →</a></p>`,
+          `<a href="${escapeHtml(data.url)}" target="_blank" rel="noopener">${escapeHtml(providerName)} →</a></p>`,
           'New tab was blocked.'
         );
       }
     } catch (err) {
       console.error('cart build failed:', err);
       addAssistantHtml(
-        `<p>Couldn't hand off to ${escapeHtml(state.cartProviders[providerId]?.name || providerId)}: ` +
+        `<p>Couldn't build your ${escapeHtml(providerName)} cart: ` +
         `<em>${escapeHtml(err.message || 'unknown error')}</em>. Try again in a moment.</p>`,
-        "Couldn't hand off to cart provider."
+        "Couldn't build cart."
       );
-    } finally {
-      buttonEl.disabled = false;
-      buttonEl.textContent = originalText;
-    }
-  }
-
-  // ---------- Phase 10: autonomous agent runner ----------
-  async function runAgentForRecipe(buttonEl, recipeId, providerId) {
-    const originalText = buttonEl.textContent;
-    buttonEl.disabled = true;
-    buttonEl.textContent = 'Agent working…';
-
-    const liveId = 'agent-live-' + Date.now();
-    state.messages.push({
-      role: 'assistant',
-      id: liveId,
-      text: 'Agent run starting…',
-      html: `<div class="agent-live"><h5>Agent run · ${escapeHtml(providerId)}</h5><ul id="${liveId}-feed"></ul></div>`
-    });
-    drawMessages();
-
-    const feed = () => document.getElementById(`${liveId}-feed`);
-    const pushLine = (kind, text) => {
-      const f = feed();
-      if (!f) return;
-      const li = document.createElement('li');
-      li.className = `agent-line agent-${kind}`;
-      li.innerHTML = `<strong>${escapeHtml(kind)}</strong> · ${escapeHtml(text)}`;
-      f.appendChild(li);
-      f.parentElement.scrollIntoView({ behavior: 'smooth', block: 'end' });
-    };
-
-    try {
-      const res = await fetch('/api/agent/run', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ recipeId, providerId })
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.message || `HTTP ${res.status}`);
-      }
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buf = '';
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        buf += decoder.decode(value, { stream: true });
-        const events = buf.split('\n\n');
-        buf = events.pop();
-        for (const block of events) {
-          if (!block.startsWith('event:')) continue;
-          const eventLine = block.split('\n').find(l => l.startsWith('event:')) || '';
-          const dataLine = block.split('\n').find(l => l.startsWith('data:')) || '';
-          const event = eventLine.slice('event:'.length).trim();
-          const data = JSON.parse(dataLine.slice('data:'.length).trim() || 'null');
-          if (event === 'start') pushLine('start', `Run ${data.runId} for ${data.recipeTitle}`);
-          else if (event === 'screenshot') pushLine('screenshot', data.hint + (data.hasImage ? ' (image stored)' : ''));
-          else if (event === 'decision') pushLine('decision', data.reasoning.slice(0, 200));
-          else if (event === 'action') pushLine('action', `${data.action}${data.ok ? '' : ' (failed: ' + (data.error || '') + ')'}`);
-          else if (event === 'note') pushLine('note', data.note);
-          else if (event === 'error') pushLine('error', data.message);
-          else if (event === 'done') {
-            const r = data.result || {};
-            const providerName = state.cartProviders[providerId]?.name || providerId;
-            pushLine('done', r.status === 'stopped_for_review'
-              ? `Cart ready · ${r.ingredientCount || 0} items · ${r.dryRun ? '(DRY RUN — no real browser)' : `open ${providerName} to review + checkout`}`
-              : `status=${r.status}${r.reason ? ' · ' + r.reason : ''}`);
-            if (r.cartUrl && !r.dryRun) {
-              const f = feed();
-              if (f) {
-                const li = document.createElement('li');
-                li.className = 'agent-line agent-done';
-                const a = document.createElement('a');
-                a.href = r.cartUrl;
-                a.target = '_blank';
-                a.rel = 'noopener';
-                a.textContent = 'Open cart →';
-                li.appendChild(a);
-                f.appendChild(li);
-              }
-            }
-          }
-        }
-      }
-    } catch (err) {
-      pushLine('error', err.message || String(err));
     } finally {
       buttonEl.disabled = false;
       buttonEl.textContent = originalText;
@@ -461,40 +353,23 @@
     `).join('');
     const steps = (r.instructions || []).map(s => `<li>${escapeHtml(s)}</li>`).join('');
 
-    const cookieProviders = [];
-    for (const [pid, meta] of Object.entries(state.vaultProviders || {})) {
-      if (Array.isArray(meta?.fields) && meta.fields.includes('cookies')) {
-        const p = state.cartProviders[pid] || FALLBACK_PROVIDERS[pid] || { id: pid, name: pid, mode: 'search' };
-        cookieProviders.push(p);
-      }
-    }
-    cookieProviders.sort((a, b) => {
-      if (a.id === state.preferences.cartProvider) return -1;
-      if (b.id === state.preferences.cartProvider) return 1;
-      return a.name.localeCompare(b.name);
-    });
-
-    const fallbackId = state.preferences.cartProvider || 'ubereats';
-    const fallback = state.cartProviders[fallbackId] || FALLBACK_PROVIDERS[fallbackId] || FALLBACK_PROVIDERS.ubereats;
+    const providers = Object.values(state.cartProviders || {})
+      .sort((a, b) => String(a.name).localeCompare(String(b.name)));
 
     let buttonsHtml;
     let footerNote;
-    if (cookieProviders.length > 0) {
-      buttonsHtml = cookieProviders.map(p => `
+    if (providers.length > 0) {
+      buttonsHtml = providers.map(p => `
         <button class="send" type="button" data-send-cart="${escapeHtml(r.id)}" data-provider="${escapeHtml(p.id)}">
           Order via ${escapeHtml(p.name)} →
         </button>
       `).join('');
-      footerNote = cookieProviders.length === 1
-        ? `Agent will sign in to ${escapeHtml(cookieProviders[0].name)} with your saved session and load the cart for you.`
-        : `Pick a store — the agent will sign in with your saved session and load the cart for you.`;
+      footerNote = providers.length === 1
+        ? `Opens ${escapeHtml(providers[0].name)} in a new tab with this recipe pre-loaded as a shoppable cart.`
+        : `Pick a store. Opens in a new tab with this recipe pre-loaded as a shoppable cart.`;
     } else {
-      buttonsHtml = `
-        <button class="send" type="button" data-send-cart="${escapeHtml(r.id)}" data-provider="${escapeHtml(fallback.id)}">
-          Send to ${escapeHtml(fallback.name)} →
-        </button>
-      `;
-      footerNote = MODE_NOTES[fallback.mode] || '';
+      buttonsHtml = '';
+      footerNote = 'Ordering is temporarily unavailable.';
     }
 
     const totalMin = r.time?.total_min || 0;
@@ -599,8 +474,7 @@
       recipesById: {},
       cartProviders: state.cartProviders,
       preferences: loadPreferences(),
-      auth: state.auth,
-      vaultProviders: state.vaultProviders
+      auth: state.auth
     };
     startChat();
   }

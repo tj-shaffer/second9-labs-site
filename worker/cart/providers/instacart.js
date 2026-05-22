@@ -1,67 +1,133 @@
-// Instacart cart provider.
+// Instacart cart provider — official Recipe API.
 //
-// Behavior depends on whether INSTACART_API_KEY is configured:
-//   - With key (post-IDP-approval): calls the real Recipe API to mint a pre-loaded
-//     shopping list URL. Returns mode 'cart'.
-//   - Without key (v1 default): builds a public search URL that pre-fills the
-//     consumer-facing Instacart search with the ingredient names. Returns mode 'search'.
+// Calls the Instacart Developer Platform's Create Recipe Page endpoint:
+//   POST https://connect.instacart.com/idp/v1/products/recipe
+// Returns a `products_link_url` the user opens to land on Instacart with the
+// recipe pre-loaded as a shoppable cart, signed into their own residential
+// session — zero CAPTCHAs, zero stored credentials.
 //
-// The frontend uses mode to render honest UX text — "Cart pre-loaded" vs "Pre-searched".
+// Docs: https://docs.instacart.com/developer_platform_api/api/products/create_recipe_page
+//
+// Requires INSTACART_API_KEY (Bearer token from Instacart Developer Platform
+// signup). Without it, this provider throws — there is no public-search
+// fallback in the post-pivot architecture.
 
-import { dedupedNames } from '../utils.js';
+const RECIPE_API_URL = 'https://connect.instacart.com/idp/v1/products/recipe';
 
-const SEARCH_URL = 'https://www.instacart.com/store/s';
-const IDP_URL = 'https://connect.instacart.com/idp/v1/products/products_link';
+// Units Instacart accepts in `measurements[].unit`. Map our common aliases to
+// the canonical form. Anything unknown is sent through as-is — the API will
+// best-effort match against the catalog.
+const UNIT_ALIASES = {
+  tbsp: 'tablespoon',
+  tbsps: 'tablespoon',
+  tablespoons: 'tablespoon',
+  tsp: 'teaspoon',
+  tsps: 'teaspoon',
+  teaspoons: 'teaspoon',
+  oz: 'ounce',
+  ozs: 'ounce',
+  ounces: 'ounce',
+  lb: 'pound',
+  lbs: 'pound',
+  pounds: 'pound',
+  cups: 'cup',
+  pints: 'pint',
+  quarts: 'quart',
+  gallons: 'gallon',
+  grams: 'gram',
+  g: 'gram',
+  kg: 'kilogram',
+  ml: 'milliliter',
+  milliliters: 'milliliter',
+  l: 'liter',
+  liters: 'liter',
+  cloves: 'each',
+  pieces: 'each',
+  pcs: 'each',
+  large: 'each',
+  medium: 'each',
+  small: 'each'
+};
 
 export default {
   id: 'instacart',
   name: 'Instacart',
-  description: 'Grocery delivery from local stores',
-  mode: 'search', // baseline mode; buildLink may upgrade to 'cart' if IDP key is set
+  description: 'One-tap to a pre-loaded shoppable cart at your local store.',
+  mode: 'cart',
 
-  async buildLink(ingredients, env) {
-    const names = dedupedNames(ingredients);
-    if (names.length === 0) {
-      throw new Error('No ingredient names to build link for.');
+  async buildLink(recipe, env, opts = {}) {
+    if (!env?.INSTACART_API_KEY) {
+      throw new Error('INSTACART_API_KEY is not set on the Worker.');
+    }
+    if (!recipe || !Array.isArray(recipe.ingredients) || recipe.ingredients.length === 0) {
+      throw new Error('Recipe has no ingredients to map to a cart.');
     }
 
-    // If IDP API key is configured, try the real Recipe API first.
-    if (env?.INSTACART_API_KEY) {
-      try {
-        const url = await callIDP(names, env.INSTACART_API_KEY);
-        if (url) return { url, mode: 'cart' };
-      } catch (err) {
-        console.error('[instacart] IDP call failed, falling back to search URL:', err);
-        // fall through to search URL
-      }
-    }
+    const body = buildRequestBody(recipe, opts);
+    const res = await fetch(RECIPE_API_URL, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${env.INSTACART_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(body)
+    });
 
-    // v1 default: public search URL.
-    const u = new URL(SEARCH_URL);
-    u.searchParams.set('k', names.join(','));
-    return { url: u.toString(), mode: 'search' };
+    if (!res.ok) {
+      const detail = (await res.text()).slice(0, 300);
+      throw new Error(`Instacart Recipe API ${res.status}: ${detail}`);
+    }
+    const data = await res.json();
+    if (!data?.products_link_url) {
+      throw new Error('Instacart Recipe API returned no products_link_url.');
+    }
+    return { url: data.products_link_url, mode: 'cart' };
   }
 };
 
-// Call the Instacart Developer Platform Recipe API to mint a pre-loaded
-// shopping list URL. Endpoint:
-//   POST https://connect.instacart.com/idp/v1/products/products_link
-async function callIDP(names, apiKey) {
-  const res = await fetch(IDP_URL, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      title: 'Recipe shopping list',
-      line_items: names.map(n => ({ name: n, quantity: 1 }))
-    })
-  });
-  if (!res.ok) {
-    const detail = (await res.text()).slice(0, 200);
-    throw new Error(`IDP ${res.status}: ${detail}`);
+function buildRequestBody(recipe, { preferences = {}, partnerLinkbackUrl } = {}) {
+  const body = {
+    title: recipe.title,
+    ingredients: recipe.ingredients.map(i => mapIngredient(i, preferences)),
+    expires_in: 30
+  };
+
+  if (recipe.imageUrl) body.image_url = recipe.imageUrl;
+  if (recipe.servings) body.servings = recipe.servings;
+  if (recipe.time?.total_min) body.cooking_time = recipe.time.total_min;
+  if (Array.isArray(recipe.instructions) && recipe.instructions.length) {
+    body.instructions = recipe.instructions;
   }
-  const data = await res.json();
-  return data?.products_link_url;
+  body.author = 'Biba';
+
+  const landing = {};
+  if (partnerLinkbackUrl) landing.partner_linkback_url = partnerLinkbackUrl;
+  landing.enable_pantry_items = true;
+  body.landing_page_configuration = landing;
+
+  return body;
+}
+
+function mapIngredient(ing, preferences) {
+  const out = { name: String(ing.name || '').trim() };
+  if (!out.name) return out;
+
+  const qty = Number(ing.qty);
+  if (Number.isFinite(qty) && qty > 0) {
+    out.measurements = [{
+      quantity: qty,
+      unit: normalizeUnit(ing.unit)
+    }];
+  }
+
+  if (preferences.organic) {
+    out.filters = { health_filters: ['ORGANIC'] };
+  }
+  return out;
+}
+
+function normalizeUnit(raw) {
+  if (!raw) return 'each';
+  const key = String(raw).trim().toLowerCase();
+  return UNIT_ALIASES[key] || key;
 }

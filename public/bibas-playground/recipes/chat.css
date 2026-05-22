@@ -268,43 +268,6 @@
   margin: 1rem 0 0.25rem;
 }
 
-/* Phase 10: live agent feed inside chat */
-.agent-live {
-  background: #F2ECDE;
-  border: 1.5px solid #1F4E8C;
-  border-radius: 6px;
-  padding: 0.85rem 1rem;
-  margin: 0.5rem 0;
-}
-.agent-live h5 {
-  font-family: 'Fraunces', serif;
-  margin: 0 0 0.5rem;
-  color: #1F4E8C;
-}
-.agent-live ul {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  max-height: 280px;
-  overflow-y: auto;
-}
-.agent-line {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 0.78rem;
-  padding: 0.2rem 0;
-  border-bottom: 1px dashed #14141420;
-  word-break: break-word;
-}
-.agent-line:last-child { border-bottom: none; }
-.agent-line strong {
-  color: #1F4E8C;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  font-size: 0.7rem;
-}
-.agent-line.agent-error strong { color: #D42A1F; }
-.agent-line.agent-done strong { color: #1F4E8C; }
-.agent-line.agent-done a { color: #D42A1F; font-weight: 600; }
 
 /* Typing indicator */
 .msg.assistant.typing {

@@ -1,35 +1,51 @@
 // Cart provider registry + dispatcher.
 //
-// Add a new grocery service by:
-//   1. Creating worker/cart/providers/<id>.js with the same shape as the others.
-//   2. Importing it here and adding it to PROVIDERS.
-// That's it. The settings page picks it up automatically via /api/cart/providers.
+// Post-pivot (2026-05-21): we use official partner Recipe APIs (no autonomous
+// agent, no website scraping). Providers are only listed when their API key
+// secret is set on the Worker — so /api/cart/providers honestly reflects what
+// the frontend can actually offer.
+//
+// Adding a new provider:
+//   1. Create worker/cart/providers/<id>.js with default-export shape
+//      { id, name, description, mode, requiredEnv, buildLink(recipe, env, opts) }
+//   2. Import here and add to PROVIDERS.
+//   3. Set the API key secret via `wrangler secret put`.
 
 import instacart from './providers/instacart.js';
-import ubereats from './providers/ubereats.js';
-import walmart from './providers/walmart.js';
-import doordash from './providers/doordash.js';
 
-const PROVIDERS = [ubereats, instacart, walmart, doordash];
+const PROVIDERS = [instacart];
 const BY_ID = Object.fromEntries(PROVIDERS.map(p => [p.id, p]));
-const DEFAULT_PROVIDER_ID = 'ubereats';
 
-// Public summary used by /api/cart/providers and by the frontend's settings page.
-export function listProviders() {
-  return PROVIDERS.map(p => ({
-    id: p.id,
-    name: p.name,
-    description: p.description,
-    mode: p.mode
-  }));
+// Public summary used by /api/cart/providers + the frontend's recipe card.
+// Filters to providers whose required secrets are set, so the UI only renders
+// buttons that will actually work.
+export function listProviders(env) {
+  return PROVIDERS
+    .filter(p => isProviderAvailable(p, env))
+    .map(p => ({
+      id: p.id,
+      name: p.name,
+      description: p.description,
+      mode: p.mode
+    }));
 }
 
-// Build a hand-off link for a given provider. If providerId is unknown or missing,
-// falls back to the default. Returns { url, mode, provider } where provider is
-// the id actually used (so the caller can honestly report which service handled it).
-export async function buildCart(providerId, ingredients, env) {
-  const provider = BY_ID[providerId] || BY_ID[DEFAULT_PROVIDER_ID];
-  if (!provider) throw new Error(`No cart provider registered (looked for "${providerId}")`);
-  const result = await provider.buildLink(ingredients, env);
+// Build a hand-off link for a given provider. Throws if the provider is
+// unknown or its required secret isn't set.
+export async function buildCart(providerId, recipe, env, opts = {}) {
+  const provider = BY_ID[providerId];
+  if (!provider) throw new Error(`unknown_provider:${providerId}`);
+  if (!isProviderAvailable(provider, env)) {
+    throw new Error(`provider_not_configured:${providerId}`);
+  }
+  const result = await provider.buildLink(recipe, env, opts);
   return { ...result, provider: provider.id };
+}
+
+function isProviderAvailable(provider, env) {
+  // Each provider declares which env secret(s) it requires. instacart.js
+  // checks INSTACART_API_KEY at call-time too; we mirror that here so we
+  // don't even list it when the key isn't set.
+  if (provider.id === 'instacart') return Boolean(env?.INSTACART_API_KEY);
+  return true;
 }

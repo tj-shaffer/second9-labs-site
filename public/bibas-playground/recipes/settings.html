@@ -319,19 +319,6 @@
       <textarea id="dislikes" rows="3" placeholder="e.g. cilantro, raw onions, anything too sweet"></textarea>
     </fieldset>
 
-    <fieldset>
-      <legend>Grocery service</legend>
-      <p class="hint">Where we hand off your ingredients when you're ready to shop.</p>
-
-      <div class="number-row">
-        <label for="cart-provider">Preferred service</label>
-        <select id="cart-provider" style="font:inherit; padding:0.5rem 0.6rem; border:1.5px solid #141414; border-radius:6px; background:#fff; min-width:12rem;">
-          <option value="ubereats">Uber Eats</option>
-        </select>
-      </div>
-      <p class="hint" id="provider-mode-note" style="margin-top:0.5rem;"></p>
-    </fieldset>
-
     <div class="form-actions">
       <button type="submit">Save preferences</button>
       <button type="button" class="reset-btn" id="reset-btn">↺ Reset to defaults</button>
@@ -368,19 +355,10 @@
     diet: [],
     intolerances: [],
     dislikes: '',
-    cartProvider: 'ubereats',
     decisiveMode: false
   };
   // Set to the user's email if signed in; null otherwise. Drives "anonymous"/"signed in" UX.
   let AUTH_EMAIL = null;
-  // Filled in by populateProviders() — kept here so hydrate/note can read it.
-  let PROVIDERS_BY_ID = {};
-
-  const MODE_NOTES = {
-    cart: 'Ingredients will land in a pre-loaded cart — pick a store and check out.',
-    search: 'Ingredients will pre-fill the search on this provider — you tap each to add it.',
-    browse: 'Opens the grocery section. You’ll need to search for items manually.'
-  };
 
   function loadPrefs() {
     try {
@@ -410,29 +388,17 @@
     document.querySelectorAll('input[name="intolerances"]').forEach(el => {
       el.checked = prefs.intolerances.includes(el.value);
     });
-
-    const select = document.getElementById('cart-provider');
-    if (select) {
-      const wanted = prefs.cartProvider || 'ubereats';
-      // Only set if the option exists (providers may not be loaded yet)
-      if ([...select.options].some(o => o.value === wanted)) {
-        select.value = wanted;
-      }
-      updateProviderModeNote();
-    }
   }
 
   function collect() {
     const householdRaw = parseInt(document.getElementById('household-size').value, 10);
-    const select = document.getElementById('cart-provider');
     return {
       organic: document.getElementById('organic').checked,
       decisiveMode: document.getElementById('decisive-mode').checked,
       householdSize: Number.isFinite(householdRaw) && householdRaw > 0 ? householdRaw : 2,
       diet: Array.from(document.querySelectorAll('input[name="diet"]:checked')).map(el => el.value),
       intolerances: Array.from(document.querySelectorAll('input[name="intolerances"]:checked')).map(el => el.value),
-      dislikes: document.getElementById('dislikes').value.trim(),
-      cartProvider: (select && select.value) || 'ubereats'
+      dislikes: document.getElementById('dislikes').value.trim()
     };
   }
 
@@ -502,42 +468,6 @@
     }
   }
 
-  function updateProviderModeNote() {
-    const select = document.getElementById('cart-provider');
-    const note = document.getElementById('provider-mode-note');
-    if (!select || !note) return;
-    const p = PROVIDERS_BY_ID[select.value];
-    note.textContent = p ? (MODE_NOTES[p.mode] || '') : '';
-  }
-
-  async function populateProviders() {
-    try {
-      const res = await fetch('/api/cart/providers');
-      if (!res.ok) return;
-      const data = await res.json();
-      const providers = Array.isArray(data.providers) ? data.providers : [];
-      if (!providers.length) return;
-      PROVIDERS_BY_ID = Object.fromEntries(providers.map(p => [p.id, p]));
-
-      const select = document.getElementById('cart-provider');
-      if (!select) return;
-      const current = select.value;
-      select.innerHTML = providers.map(p =>
-        `<option value="${p.id}">${p.name}</option>`
-      ).join('');
-      // Re-apply previously-stored selection if possible.
-      const stored = loadPrefs().cartProvider;
-      if (stored && PROVIDERS_BY_ID[stored]) {
-        select.value = stored;
-      } else if (current && PROVIDERS_BY_ID[current]) {
-        select.value = current;
-      }
-      updateProviderModeNote();
-    } catch (err) {
-      console.warn('settings: could not load providers from API', err);
-    }
-  }
-
   function showToast(text = '✓ Saved') {
     const toast = document.getElementById('toast');
     toast.textContent = text;
@@ -548,7 +478,6 @@
 
   // Init
   hydrate(loadPrefs());
-  populateProviders();
   renderAuthChrome();
 
   // Async: fetch the server profile and overlay if authed.
@@ -558,8 +487,6 @@
     savePrefs(merged);
     hydrate(merged);
   });
-
-  document.getElementById('cart-provider').addEventListener('change', updateProviderModeNote);
 
   document.getElementById('settings-form').addEventListener('submit', async (e) => {
     e.preventDefault();
