@@ -29,6 +29,21 @@
       "description": "Third Brain OS is Second 9 Labs' answer to the mental load of family life — the invisible work of remembering, planning, and keeping everyone's schedules, lists, and logistics straight. It's a shared brain for the household, built to lift that load off the people carrying it and make the chaos of life feel manageable.",
       "url": "https://brainos.secondninelabs.com",
       "featured": true
+    },
+    {
+      "id": "park-ppa",
+      "title": "Park PPA — digital parking payments",
+      "client": "Pitched to PPA",
+      "year": "2026",
+      "tagline": "Collect parking-lease payments digitally — the custom payment app the Pittsburgh Parking Authority didn't have.",
+      "tags": ["Payments", "Parking", "Web app"],
+      "cover": "assets/images/park-ppa.svg",
+      "images": [
+        "assets/images/park-ppa.svg"
+      ],
+      "description": "A custom application that lets a parking authority collect lease payments online — built to close the gap the Pittsburgh Parking Authority (PPA) had: no digital, app-based way to take payments. Pitched to PPA as a turnkey solution; this is the working build.",
+      "url": "https://parkinglease.secondninelabs.com",
+      "featured": true
     }
   ]
 }
