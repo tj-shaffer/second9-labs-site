@@ -1,67 +1,13 @@
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
 	"name": "second-9-labs",
-	"main": "worker/index.js",
 	"compatibility_date": "2026-04-21",
-	"observability": {
-		"enabled": true
-	},
+	// Static marketing site — assets-only, no Worker script.
+	// The recipes app (Biba's Playground) was extracted to its own
+	// repo/subdomain on 2026-06-24; its Worker + KV/R2/Vectorize/AI
+	// bindings and secrets moved with it. See git history before that
+	// date if any of the deleted backend needs reviving.
 	"assets": {
 		"directory": "./public"
-	},
-	"compatibility_flags": [
-		"nodejs_compat"
-	],
-	// KV for per-user profile, sessions, magic-link tokens, recipe history.
-	// For local dev, miniflare uses a SQLite-backed simulation — the `id` value
-	// is only meaningful when deploying. Before `npm run deploy`, run:
-	//   npx wrangler kv namespace create biba_users
-	// and paste the returned id below.
-	"kv_namespaces": [
-		{
-			"binding": "BIBA_USERS",
-			"id": "0db6c3acfbc44876900b37442cf91feb"
-		}
-	],
-	// R2 bucket for Imagen-3-generated recipe photos (Phase 6).
-	// Cache keyed by sha256(title|image_prompt); first generation only,
-	// re-served from R2 forever after. Provision once with:
-	//   npx wrangler r2 bucket create biba-recipe-images
-	"r2_buckets": [
-		{
-			"binding": "BIBA_RECIPE_IMAGES",
-			"bucket_name": "biba-recipe-images"
-		}
-	],
-	// Workers AI binding for Phase 7 memory embeddings (bge-base-en-v1.5,
-	// 768 dims). Free tier covers personal-use volume.
-	"ai": {
-		"binding": "AI",
-		"remote": true
-	},
-	// Vectorize indexes for Phase 7 memory foundation. Per-user filtering
-	// happens at query time via metadata. Provision once before deploy:
-	//   npx wrangler vectorize create biba-memory-conversations --dimensions=768 --metric=cosine
-	//   npx wrangler vectorize create biba-memory-recipes       --dimensions=768 --metric=cosine
-	// Metadata indexes (for the per-user filter to work):
-	//   npx wrangler vectorize create-metadata-index biba-memory-conversations --property-name=email --type=string
-	//   npx wrangler vectorize create-metadata-index biba-memory-recipes       --property-name=email --type=string
-	// Local dev is simulated by miniflare — no provisioning needed yet.
-	"vectorize": [
-		{
-			"binding": "MEMORY_CONVERSATIONS",
-			"index_name": "biba-memory-conversations",
-			"remote": true
-		},
-		{
-			"binding": "MEMORY_RECIPES",
-			"index_name": "biba-memory-recipes",
-			"remote": true
-		},
-		{
-			"binding": "MEMORY_CORPUS",
-			"index_name": "biba-memory-corpus",
-			"remote": true
-		}
-	]
+	}
 }
