@@ -16,22 +16,18 @@
       "featured": true
     },
     {
-      "id": "maple-studio-dashboard",
-      "title": "Maple Studio — project dashboard",
-      "client": "Maple Architecture Studio",
-      "year": "2025",
-      "tagline": "One honest dashboard that replaced three spreadsheets and a whiteboard.",
-      "tags": ["Dashboards", "Internal tools"],
-      "cover": "assets/images/maple-studio.svg",
+      "id": "third-brain-os",
+      "title": "Third Brain OS",
+      "client": "Second 9 Labs",
+      "year": "2026",
+      "tagline": "Takes the mental load off families — a shared brain for managing the chaos of life.",
+      "tags": ["Family", "Mental load", "Life management"],
+      "cover": "assets/images/third-brain.svg",
       "images": [
-        "assets/images/maple-studio.svg"
+        "assets/images/third-brain.svg"
       ],
-      "description": "The studio was tracking project status across spreadsheets, a Trello board, and someone's head. We built a single dashboard showing live project health, budget burn, and upcoming deadlines — pulling from their existing tools so nothing had to change about how they actually work.",
-      "outcome": "Monday planning meetings dropped from 90 minutes to 20. Partners finally agree on which project is behind schedule.",
-      "stack": ["React", "Recharts", "Airtable API"],
-      "links": [
-        { "label": "Live site", "url": "#" }
-      ],
+      "description": "Third Brain OS is Second 9 Labs' answer to the mental load of family life — the invisible work of remembering, planning, and keeping everyone's schedules, lists, and logistics straight. It's a shared brain for the household, built to lift that load off the people carrying it and make the chaos of life feel manageable.",
+      "url": "https://brainos.secondninelabs.com",
       "featured": true
     }
   ]

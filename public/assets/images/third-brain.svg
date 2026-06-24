@@ -1,0 +1,35 @@
+<svg viewBox="0 0 600 400" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Third Brain OS">
+  <rect x="0" y="0" width="600" height="400" fill="#F2ECDE"/>
+
+  <!-- edges (knowledge graph), drawn behind the nodes -->
+  <g stroke="#141414" stroke-width="3" stroke-linecap="round">
+    <line x1="300" y1="200" x2="175" y2="135"/>
+    <line x1="300" y1="200" x2="435" y2="150"/>
+    <line x1="300" y1="200" x2="165" y2="278"/>
+    <line x1="300" y1="200" x2="440" y2="275"/>
+    <line x1="300" y1="200" x2="300" y2="76"/>
+    <line x1="300" y1="200" x2="300" y2="330"/>
+    <line x1="175" y1="135" x2="300" y2="76"/>
+    <line x1="435" y1="150" x2="300" y2="76"/>
+    <line x1="175" y1="135" x2="165" y2="278"/>
+    <line x1="435" y1="150" x2="440" y2="275"/>
+    <line x1="165" y1="278" x2="300" y2="330"/>
+    <line x1="440" y1="275" x2="300" y2="330"/>
+    <line x1="175" y1="135" x2="108" y2="205"/>
+    <line x1="440" y1="275" x2="498" y2="205"/>
+  </g>
+
+  <!-- outer nodes -->
+  <circle cx="175" cy="135" r="22" fill="#1F4E8C" stroke="#141414" stroke-width="2.5"/>
+  <circle cx="435" cy="150" r="19" fill="#F2B01E" stroke="#141414" stroke-width="2.5"/>
+  <circle cx="165" cy="278" r="17" fill="#141414"/>
+  <circle cx="440" cy="275" r="23" fill="#1F4E8C" stroke="#141414" stroke-width="2.5"/>
+  <circle cx="300" cy="76" r="15" fill="#F2B01E" stroke="#141414" stroke-width="2.5"/>
+  <circle cx="300" cy="330" r="16" fill="#141414"/>
+  <circle cx="108" cy="205" r="10" fill="#1F4E8C" stroke="#141414" stroke-width="2"/>
+  <circle cx="498" cy="205" r="11" fill="#F2B01E" stroke="#141414" stroke-width="2"/>
+
+  <!-- hub: the logo aperture, the core of the third brain -->
+  <circle cx="300" cy="200" r="34" fill="#D42A1F" stroke="#141414" stroke-width="3"/>
+  <circle cx="300" cy="200" r="14" fill="#F2ECDE"/>
+</svg>
