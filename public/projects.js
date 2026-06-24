@@ -28,8 +28,11 @@
       return;
     }
 
-    mount.innerHTML = projects.map((p, i) => `
-      <a class="project-card reveal" href="${p.url ? escapeHtml(p.url) : 'project.html?id=' + encodeURIComponent(p.id)}" style="transition-delay: ${Math.min(i * 0.08, 0.4)}s">
+    mount.innerHTML = projects.map((p, i) => {
+      const href = p.url ? escapeHtml(p.url) : 'project.html?id=' + encodeURIComponent(p.id);
+      const external = p.url && /^https?:\/\//.test(p.url);
+      return `
+      <a class="project-card reveal" href="${href}"${external ? ' target="_blank" rel="noopener"' : ''} style="transition-delay: ${Math.min(i * 0.08, 0.4)}s">
         <div class="project-cover">
           <img src="${escapeHtml(p.cover)}" alt="" loading="lazy" />
         </div>
@@ -45,7 +48,8 @@
           </div>
         </div>
       </a>
-    `).join('');
+    `;
+    }).join('');
 
     // Trigger reveal animations
     requestAnimationFrame(() => {

@@ -7,31 +7,27 @@
       "year": "2026",
       "tagline": "A growing collection of small, playful apps — built with love, one at a time.",
       "tags": ["Mini apps", "Personal", "Playground"],
-      "cover": "assets/images/placeholder-1.svg",
+      "cover": "assets/images/bibas-playground.svg",
       "images": [
-        "assets/images/placeholder-1.svg"
+        "assets/images/bibas-playground.svg"
       ],
       "description": "A home for the little apps I build for Biba — quick, joyful things rather than client work. Each one is its own self-contained experiment, and the collection grows whenever inspiration strikes.",
       "url": "bibas-playground/",
       "featured": true
     },
     {
-      "id": "oak-accounting-ai-triage",
-      "title": "Oak & Co. Accounting — email triage",
-      "client": "Oak & Co. Accounting",
+      "id": "everstory-bangers-n-mash",
+      "title": "Bangers N Mash — test case management",
+      "client": "Everstory Partners IT",
       "year": "2026",
-      "tagline": "An LLM assistant that sorts client emails, drafts routine replies, and flags anything it's unsure about.",
-      "tags": ["AI integration", "LLM", "Operations"],
-      "cover": "assets/images/placeholder-2.svg",
+      "tagline": "Test case management built for one IT team — UAT, regression, and vendor case studies, all in one place.",
+      "tags": ["Test management", "UAT & regression", "Internal tools"],
+      "cover": "assets/images/bangers-n-mash.svg",
       "images": [
-        "assets/images/placeholder-2.svg"
+        "assets/images/bangers-n-mash.svg"
       ],
-      "description": "A small accounting firm was losing hours every week sorting through repetitive client inquiries. We built a triage assistant that reads incoming email, categorizes it, drafts a reply for the partner to review, and escalates anything ambiguous. Runs locally on the firm's own infrastructure — no client data leaves the building.",
-      "outcome": "Estimated 6–8 hours of partner time saved per week. Zero client data shared with third-party AI providers.",
-      "stack": ["Python", "Claude API", "Postgres", "Local deployment"],
-      "links": [
-        { "label": "Case study", "url": "#" }
-      ],
+      "description": "Everstory Partners' IT team runs testing across a stack of vendor products — user acceptance testing, regression cycles, case studies — and it lived scattered across spreadsheets and inboxes. Bangers N Mash puts it in one place: author test cases, track results across cycles, and disseminate findings to the people who need them.",
+      "url": "https://bangersnmash.secondninelabs.com",
       "featured": true
     },
     {
@@ -41,9 +37,9 @@
       "year": "2025",
       "tagline": "One honest dashboard that replaced three spreadsheets and a whiteboard.",
       "tags": ["Dashboards", "Internal tools"],
-      "cover": "assets/images/placeholder-3.svg",
+      "cover": "assets/images/maple-studio.svg",
       "images": [
-        "assets/images/placeholder-3.svg"
+        "assets/images/maple-studio.svg"
       ],
       "description": "The studio was tracking project status across spreadsheets, a Trello board, and someone's head. We built a single dashboard showing live project health, budget burn, and upcoming deadlines — pulling from their existing tools so nothing had to change about how they actually work.",
       "outcome": "Monday planning meetings dropped from 90 minutes to 20. Partners finally agree on which project is behind schedule.",

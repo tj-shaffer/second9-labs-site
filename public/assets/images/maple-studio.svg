@@ -1,0 +1,24 @@
+<svg viewBox="0 0 600 400" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Maple Studio — project dashboard">
+  <rect x="0" y="0" width="600" height="400" fill="#F2ECDE"/>
+
+  <!-- header: title bar + logo-aperture accent -->
+  <rect x="150" y="64" width="130" height="15" rx="7.5" fill="#141414"/>
+  <circle cx="448" cy="72" r="12" fill="#D42A1F" stroke="#141414" stroke-width="2.5"/>
+  <circle cx="448" cy="72" r="4.5" fill="#F2ECDE"/>
+
+  <!-- axes -->
+  <path d="M150 110 L150 300 L470 300" fill="none" stroke="#141414" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- bars -->
+  <rect x="176" y="190" width="52" height="110" rx="6" fill="#1F4E8C" stroke="#141414" stroke-width="3"/>
+  <rect x="254" y="150" width="52" height="150" rx="6" fill="#F2B01E" stroke="#141414" stroke-width="3"/>
+  <rect x="332" y="180" width="52" height="120" rx="6" fill="#D42A1F" stroke="#141414" stroke-width="3"/>
+  <rect x="410" y="110" width="52" height="190" rx="6" fill="#1F4E8C" stroke="#141414" stroke-width="3"/>
+
+  <!-- trend line over bar tops -->
+  <polyline points="202,190 280,150 358,180 436,110" fill="none" stroke="#141414" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="202" cy="190" r="6" fill="#F8F3E4" stroke="#141414" stroke-width="3"/>
+  <circle cx="280" cy="150" r="6" fill="#F8F3E4" stroke="#141414" stroke-width="3"/>
+  <circle cx="358" cy="180" r="6" fill="#F8F3E4" stroke="#141414" stroke-width="3"/>
+  <circle cx="436" cy="110" r="6" fill="#F8F3E4" stroke="#141414" stroke-width="3"/>
+</svg>

@@ -1,0 +1,7 @@
+<svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Second 9 Labs">
+  <rect x="0" y="0" width="120" height="120" rx="24" fill="#F2ECDE"/>
+  <circle cx="52" cy="46" r="30" fill="#D42A1F"/>
+  <circle cx="52" cy="46" r="14" fill="#F2ECDE"/>
+  <rect x="76" y="46" width="14" height="58" fill="#141414"/>
+  <rect x="76" y="18" width="14" height="14" fill="#F2B01E"/>
+</svg>
