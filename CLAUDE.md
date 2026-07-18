@@ -109,6 +109,10 @@ JSON syntax error makes the gallery show "Couldn't load projects."
 
 ## Where to find things
 - **Brand kit + marketing copy:** `README.md`
-- **Non-technical deploy / onboarding guide:** `DEPLOYMENT.md` (describes a
-  Cloudflare Pages flow; the actual deploy today is `npm run deploy` via wrangler)
+- **Complete brand & design system:** `DESIGN.md` (logo, tokens, type,
+  illustration rules, components, voice — written to hand to a person or an AI)
+- **Non-technical deploy / onboarding guide:** `DEPLOYMENT.md` (the real
+  `npm run deploy` wrangler flow)
+- **Per-product overviews:** `Docs/*-overview.md` (source-of-truth descriptions
+  for each Second 9 product — Bangers N Mash, Third Brain OS, MC Peels)
 - **Deleted recipes app:** git history before the 2026-06-24 extraction commit

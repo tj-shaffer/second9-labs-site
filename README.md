@@ -1,141 +1,100 @@
 # Second 9 Labs — Website & Brand Kit
 
-Everything you need to publish the site and apply the brand consistently elsewhere (business cards, invoices, proposals, social).
+Everything needed to run the Second 9 Labs marketing site and apply the brand
+consistently (site, business cards, invoices, decks, social).
 
-> **Heads up — repo is now dual-purpose.** This README still covers the
-> Second 9 Labs marketing site (the original purpose). Since the
-> Kitchen OS arc shipped on the `kitchen-os` branch, the same repo
-> also hosts **Biba's Playground** — a Cloudflare Worker + AI app at
-> `/bibas-playground/recipes/`. For that side of the codebase, start
-> from [`CLAUDE.md`](CLAUDE.md) (current architecture orientation)
-> and `~/.claude/plans/what-s-the-scoop-i-silly-kahn.md` (full
-> roadmap). The brand-kit content below is unchanged.
+**Production:** https://second-9-labs.tj-shaffer.workers.dev
 
----
+## What this repo is
 
-## 1. What's in this folder
+A deliberately simple **static marketing site** served from Cloudflare —
+hand-written HTML/CSS/JS, no build step, no framework, no backend. It's an
+**assets-only Cloudflare Worker**: every request is served straight from
+`public/`.
+
+Each Second 9 product — **Bangers N Mash, Third Brain OS, Park PPA, MC Peels** —
+is its own independent deployment on its own subdomain. This site is the hub
+that links out to them.
+
+> The recipes app (Biba's Playground) that used to live in this repo was
+> extracted to its own subdomain on 2026-06-24; the backend, bindings, and
+> secrets moved with it. See `CLAUDE.md` for the history.
+
+## What's in this folder
 
 ```
 second9-labs-site/
-├── public/                       Browser-served assets (Cloudflare Workers assets dir)
-│   ├── index.html                Homepage
-│   ├── projects.{html,js,json}   Gallery + admin panel
-│   ├── project.html              Project detail template
-│   ├── styles.css                Brand system + all page styles
-│   ├── script.js                 Scroll reveals + nav polish
-│   ├── bibas-playground/         The "personal mini-apps" hub
-│   │   ├── index.html            Playground hub
-│   │   └── recipes/              The Kitchen OS recipe app (Phases 1–10)
-│   └── assets/                   Logos, icons, project images
-├── worker/                       Cloudflare Worker source (Kitchen OS backend)
-│   ├── index.js                  Route table + handlers
-│   ├── (many modules)            See CLAUDE.md for the full map
-│   └── agent/                    Computer-use agent + strategies/
-├── wrangler.jsonc                Cloudflare Worker config (bindings live here)
-├── package.json                  npm scripts (dev / deploy)
-├── .dev.vars.example             Template for local secrets
-├── CLAUDE.md                     Codebase orientation for Claude Code sessions
-├── README.md                     This file (brand kit + dual-purpose note)
-├── DEPLOYMENT.md                 Hosting instructions for the marketing site
-└── PRD.md                        v1 product spec (Kitchen OS-pivot predecessor)
+├── public/                      Everything served to the browser (the whole site)
+│   ├── index.html               Home page
+│   ├── projects.html            Project gallery
+│   ├── project.html             Per-project detail view (?id=<slug>)
+│   ├── privacypolicy.html
+│   ├── termsofservice.html
+│   ├── projects.json            ← content source for all projects (edit this)
+│   ├── projects.js              Renders the gallery, home featured strip, and detail view
+│   ├── script.js                Scroll reveals + nav polish
+│   ├── styles.css               Brand system + all page styles
+│   └── assets/
+│       ├── favicon.svg
+│       └── images/*.svg         Project cover art (hand-authored SVG)
+├── wrangler.jsonc               Cloudflare config (assets-only; no Worker script)
+├── package.json                 npm scripts (dev / deploy)
+├── CLAUDE.md                    Orientation for Claude Code sessions
+├── DESIGN.md                    The complete brand & design system
+├── DEPLOYMENT.md                Non-technical deploy / onboarding guide
+├── README.md                    This file
+└── Docs/                        Per-product overview write-ups (source-of-truth descriptions)
 ```
 
-**To publish the marketing side:** read `DEPLOYMENT.md`. Start-to-finish in about 45 minutes.
-**To work on Kitchen OS:** `npm run dev` to boot wrangler. Read `CLAUDE.md` first.
-**To add a project after launch:** edit `public/projects.json` on GitHub. Site redeploys automatically.
+- **Preview locally:** `npm run dev`
+- **Publish:** `npm run deploy` — see `DEPLOYMENT.md` for the friendly walkthrough
+- **Add or change a project:** edit `public/projects.json` — details in `CLAUDE.md`
 
----
+## The brand, in one screen
 
-## 2. Brand identity
+The complete system — logo construction, exact tokens, the type scale,
+illustration rules, components, and voice — lives in **`DESIGN.md`**, written to
+be handed to a person or an AI as-is. The essentials:
 
-### 2.1 The idea
-**"Conditions for human flourishing."** The brand sits in the lineage of WPA posters, early Bauhaus signage, and mid-century constructivism — visual traditions rooted in the dignity of work and tools that serve people. Geometric, confident, primary-colored. Warm in voice, structural in form.
+**Essence:** *"Conditions for human flourishing."* WPA poster + early-Bauhaus +
+constructivism — geometric and confident in form, warm and plain in voice. The
+name is a promise: *a second pass, done better.*
 
-The name is a promise: *a second pass, done better.* The mark is a 9 built from three shapes in dialogue — a red ring (the bowl), a black vertical bar (the descender), and a small yellow accent square. Constructed, not drawn. Modernist, not nostalgic.
+**Color** — paper ground, ink structure, a primary triad for signal. *Red is
+load-bearing, yellow is a punch, blue is a whisper — never all three at equal
+volume.*
+- Paper `#F2ECDE` · Paper Deep `#E8DFC8` · Paper Card `#F8F3E4`
+- Ink `#141414` · Ink Soft `#3A3A36` · Ink Mute `#6B6A62`
+- Red `#D42A1F` · Yellow `#F2B01E` · Blue `#1F4E8C`
 
-### 2.2 Logo usage
-- **Primary lockup** (`assets/logo-primary.svg`) — for headers, letterhead, pitch decks.
-- **Mark alone** (`assets/logo-mark.svg`) — for avatars, favicons, watermarks, anywhere under ~64px.
-- Keep a clear space equal to the height of the yellow accent square around the logo.
-- Don't stretch, recolor, or rotate. The red is the red. The yellow is the yellow.
-- On ink backgrounds, the inner "hole" of the bowl should match the background color (not the paper color).
+**Type** — Fraunces (display serif), DM Sans (body), JetBrains Mono (labels).
+Emphasis words and the "9" go italic + red.
 
-### 2.3 Color palette
+**Illustration** — circles, rectangles, triangles only; thick strokes, flat
+fills, asymmetric compositions; the logo aperture recurs as a motif. Covers are
+`600×400` (3:2).
 
-| Role | Name | Hex | Use |
-|---|---|---|---|
-| Background | Paper | `#F2ECDE` | Default background, newsprint warmth |
-| Background alt | Paper Deep | `#E8DFC8` | Section separation, FAQ |
-| Card | Paper Card | `#F8F3E4` | Service cards, step cards |
-| Structural | Ink | `#141414` | All body text, borders, structural blocks |
-| Signal | Red | `#D42A1F` | The dominant accent. The 9. Emphasis. CTAs. |
-| Accent | Yellow | `#F2B01E` | Secondary punch. Step 4. Accents. Hover states. |
-| Secondary | Blue | `#1F4E8C` | Occasional, for variety. Step 3. AI icon. |
+**Voice** — like a friend who happens to be good at software. "We," not the
+company name; "you," not "clients." Allergic to *leverage / synergy / solutions
+/ transform*; at home with *ship / build / boring / honest / useful*.
 
-**Rule of thumb:** red is load-bearing. Yellow is a punch. Blue is a whisper. Never use all three at equal volume — one dominates per surface.
+## Applying the brand beyond the site
 
-### 2.4 Typography
-- **Fraunces** — display serif for headings. Use weight 700 for headlines, 600 for section titles. Italic + red for emphasis words and "9".
-- **DM Sans** — body copy. Weight 400 default, 500 for buttons and nav.
-- **JetBrains Mono** — eyebrow labels, step numbers, footer. Small caps tracking (0.18em letter-spacing).
+Because it's built from simple geometric pieces in three colors, it travels well:
+- **Business cards** — mark on the front, contact on the back in Fraunces / DM Sans, warm uncoated stock near the paper color.
+- **Invoices & proposals** — primary lockup header, DM Sans body, the red-bar rule for section breaks.
+- **Slide decks** — cream background, ink text, one primary accent per slide.
+- **Social avatars** — the favicon works as-is on a cream square.
 
-All three are free Google Fonts, already loaded via the CDN in `index.html`.
+Need a new icon? Build it from the same vocabulary (circle + rectangle +
+triangle, two colors max plus ink and paper) and it'll match. `DESIGN.md` has
+the rules and reference SVGs.
 
-### 2.5 The geometric rule
-All illustrative SVGs follow the same vocabulary so they feel like one set:
-- Circles, rectangles, triangles. No curves beyond those primitives.
-- No hand-drawn wobble. No dashed sketch lines. Everything constructed.
-- Strokes are thick (2–3px minimum) and solid.
-- Compositions are asymmetric — one dominant element, small accent shapes, never centered-and-balanced.
-- Flat fills only. No gradients, no shadows on illustrations. (The buttons have a hard shadow — that's different, it's a structural choice.)
-
-### 2.6 Voice
-- Warm, plain, confident. Like a friend who happens to be good at software.
-- Short sentences beat long ones.
-- "We" not "Second 9 Labs." "You" not "clients."
-- Allergic to: *leverage, synergy, solutions, transform, unlock, journey, partner as a verb*.
-- At home with: *ship, build, listen, boring, afternoon, honest, useful*.
-
----
-
-## 3. Publishing the site
-
-See `DEPLOYMENT.md` in this folder for the full step-by-step. Short version: put the files in a GitHub repo, connect Cloudflare Pages, done.
-
----
-
-## 5. Rough starter budget
+## Rough starter budget (year one)
 
 | Item | Cost |
 |---|---|
-| Domain (`.com` at Cloudflare cost) | ~$10/year |
-| Cloudflare Pages hosting | $0 |
-| Email (Fastmail, 1 address) | $5/mo |
+| Domain (`.com` at Cloudflare cost) | ~$10/yr |
+| Cloudflare Workers hosting (static assets) | $0 |
+| Email (Cloudflare Email Routing) | $0 (or Fastmail ~$5/mo) |
 | Calendar booking (Cal.com free tier) | $0 |
-| **Total year one** | **~$70** |
-
----
-
-## 6. Applying the brand beyond the website
-
-Because the brand is built from simple geometric pieces in three colors, it travels well:
-
-- **Business cards** — mark on the front (bleed red to edge on one side), contact info on the back in Fraunces / DM Sans. Printed on a warm uncoated stock close to the paper color.
-- **Invoices & proposals** — header is the primary lockup, body uses DM Sans, section breaks use the red bar treatment from the hero.
-- **Slide decks** — cream paper background, ink text, one primary-color accent per slide. Copy the service icon style for any custom illustrations.
-- **Social avatars** — the favicon works as-is. Square, 400×400, cream background.
-- **Email signature** — mark + wordmark inline, name in Fraunces 600, everything else in DM Sans.
-
-The system is easy to extend: if you need a new icon, build it from the same vocabulary (circle + rectangle + triangle, two colors max plus ink and paper), and it'll match.
-
----
-
-## 7. When you want to grow the site
-
-Easy next additions, in order of usefulness:
-1. **Case studies page** (once you have 2–3 clients) — `case-studies.html` using the same styles.
-2. **Blog** — drop a `/writing/` folder with markdown; use a static site generator like Astro or Eleventy if you want proper blog tooling.
-3. **Contact form** — switch to Netlify for free form handling, or use [Formspree](https://formspree.io) on Cloudflare Pages.
-4. **Testimonials block** — add between Process and Manifesto sections.
-
-The CSS is organized in clearly labeled sections, so extending it should feel friendly.
