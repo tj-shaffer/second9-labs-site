@@ -44,6 +44,21 @@
       "description": "A custom application that lets a parking authority collect lease payments online — built to close the gap the Pittsburgh Parking Authority (PPA) had: no digital, app-based way to take payments. Pitched to PPA as a turnkey solution; this is the working build.",
       "url": "https://parkinglease.secondninelabs.com",
       "featured": true
+    },
+    {
+      "id": "mc-peels",
+      "title": "MC Peels — the grocery concierge",
+      "client": "Second 9 Labs",
+      "year": "2026",
+      "tagline": "Takes the grocery-list translation off your plate — say what you want to eat, get a checkout-ready cart already filtered to your family's diet.",
+      "tags": ["Groceries", "Household tools", "Agentic commerce"],
+      "cover": "assets/images/mc-peels.svg",
+      "images": [
+        "assets/images/mc-peels.svg"
+      ],
+      "description": "MC Peels is a household grocery concierge: say what you want in plain language and it builds a ready-to-checkout Instacart or Kroger cart, automatically filtered to your family's standing dietary rules. Save a recipe from TikTok or Pinterest, and once a household has saved enough of one cuisine, MC Peels mints a themed AI-designed kitchen around it — a name, a voice, a palette, all its own.",
+      "url": "https://mc-peels.secondninelabs.com",
+      "featured": true
     }
   ]
 }
