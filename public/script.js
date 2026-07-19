@@ -31,7 +31,9 @@ document.querySelectorAll('nav.site a[href^="#"]').forEach((a) => {
     const target = document.querySelector(a.getAttribute('href'));
     if (target) {
       e.preventDefault();
-      const top = target.getBoundingClientRect().top + window.scrollY - 60;
+      const nav = document.querySelector('nav.site');
+      const navH = nav ? nav.offsetHeight : 72;
+      const top = target.getBoundingClientRect().top + window.scrollY - (navH + 8);
       window.scrollTo({ top, behavior: 'smooth' });
     }
   });
