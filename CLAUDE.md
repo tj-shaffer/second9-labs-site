@@ -23,6 +23,16 @@ were preserved** on the account for the rebuild to reuse — they're just no
 longer referenced here. To revive any deleted code, check git history before
 the 2026-06-24 extraction commit.
 
+## History — v3 "Linocut" redesign shipped 2026-07-18
+
+The site was redesigned end-to-end: **Big Shoulders / Archivo / Space Mono**
+replaced Fraunces / DM Sans / JetBrains Mono; the color system flipped from
+paper-led to **blue-led rooms** (red secondary, yellow = action); the old
+ring-and-bar mark was replaced by the **Second Sun** (a 9 as a sun with nine
+carved rays) inside a **split-arc seal** lockup; illustration language is now
+**linocut** (rough displacement-filtered edges, gouge marks). `DESIGN.md` v3 is
+the authority. The pre-redesign look lives in git history before this date.
+
 ## Architecture
 
 A single **assets-only Cloudflare Worker** — there is no Worker script.
@@ -43,7 +53,7 @@ Cloudflare's default asset `html_handling`.
 | `projects.js` | Renders the gallery, the home featured strip, and the detail view from `projects.json` |
 | `script.js` | Reveal animations, smooth-scroll nav, calendar-link placeholder |
 | `styles.css` | All styling + brand tokens (`:root`) |
-| `assets/favicon.svg` | Favicon — the logo mark on a paper backplate |
+| `assets/favicon.svg` | Favicon — the Second Sun mark on a blue backplate |
 | `assets/images/*.svg` | Project cover art (hand-authored SVG) |
 
 ### projects.json → projects.js (the one dynamic-ish piece)
@@ -72,15 +82,21 @@ on which mount element the page contains:
 - **`escapeHtml(str)`** — defined inline at the top of `projects.js`. Copy it
   into any HTML-building frontend code rather than importing.
 - **Brand tokens** (`styles.css` `:root`): `--paper #F2ECDE`, `--paper-deep
-  #E8DFC8`, `--paper-card #F8F3E4`, `--ink #141414` (+ `--ink-soft #3A3A36`,
-  `--ink-mute #6B6A62`), accents `--red #D42A1F`, `--yellow #F2B01E`, `--blue
-  #1F4E8C`. Fonts: Fraunces (display), DM Sans (UI), JetBrains Mono (labels).
+  #E8DFC8`, `--paper-card #F8F3E4`, `--ink #141414` (+ `--ink-soft`, `--ink-mute`),
+  `--red #D42A1F` / `--red-deep #A8200F`, `--yellow #F2B01E`, `--blue #1F4E8C` /
+  `--blue-deep #173B6B`. Fonts: Big Shoulders (display, 800 caps), Archivo
+  (body/UI), Space Mono (labels). Volume rule: blue is the room, red the second
+  room, yellow the action — and **red never carries body copy** (4.3:1); reading
+  text on red sections sits on paper cards. No italic emphasis-words anywhere.
+- **The seal + sun defs** — every page inlines an `<svg width="0" height="0">`
+  defs block (rough filters, `#arcTop`/`#arcBot`, `#sun-on-blue/paper/ink`)
+  right after `<body>`; the nav/footer seals `<use>` those ids. Copy the defs
+  block to any new page.
 - **Project cover art** — hand-authored SVG in `public/assets/images/`,
-  `viewBox="0 0 600 400"` (3:2), bold geometric Bauhaus-ish brand style with the
-  logo aperture (red circle + paper hole) recurring as a motif. A missing cover
-  degrades to a clean paper-colored block (`.project-cover` has a `--paper`
-  background), not a broken-image icon. Real screenshots (~1200×800, 3:2) drop
-  in just as well.
+  `viewBox="0 0 600 400"` (3:2). Existing covers are v2-era geometric-flat and
+  remain valid; new covers should be cut linocut-style (rough edges, gouges —
+  see DESIGN.md §5). A missing cover degrades to a clean paper-colored block,
+  not a broken-image icon. Real screenshots (~1200×800, 3:2) drop in just as well.
 
 ### Adding / changing project work
 Edit `public/projects.json`. To add a project, copy an existing block and set

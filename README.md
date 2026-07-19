@@ -56,23 +56,28 @@ The complete system — logo construction, exact tokens, the type scale,
 illustration rules, components, and voice — lives in **`DESIGN.md`**, written to
 be handed to a person or an AI as-is. The essentials:
 
-**Essence:** *"Conditions for human flourishing."* WPA poster + early-Bauhaus +
-constructivism — geometric and confident in form, warm and plain in voice. The
-name is a promise: *a second pass, done better.*
+**Essence:** *"Conditions for human flourishing."* WPA posters, early-Bauhaus
+signage, and historic labor movements, executed as **linocut** — carved shapes,
+rough edges, primary colors. The name is a promise: a second pass, done better.
 
-**Color** — paper ground, ink structure, a primary triad for signal. *Red is
-load-bearing, yellow is a punch, blue is a whisper — never all three at equal
-volume.*
+**The mark** — the Second Sun: a 9 built as a rising sun with exactly nine
+carved rays. The lockup is the **seal**: name on the top arc, "Human
+flourishing" on the bottom, the sun in the middle.
+
+**Color** — primaries lead. *Blue is the room, red is the second room, yellow
+is the action, paper is the carve, ink is the impression.* Red never carries
+body copy (contrast); blue does (7.1:1).
+- Blue `#1F4E8C` · Blue Deep `#173B6B` · Red `#D42A1F` · Red Deep `#A8200F` · Yellow `#F2B01E`
 - Paper `#F2ECDE` · Paper Deep `#E8DFC8` · Paper Card `#F8F3E4`
 - Ink `#141414` · Ink Soft `#3A3A36` · Ink Mute `#6B6A62`
-- Red `#D42A1F` · Yellow `#F2B01E` · Blue `#1F4E8C`
 
-**Type** — Fraunces (display serif), DM Sans (body), JetBrains Mono (labels).
-Emphasis words and the "9" go italic + red.
+**Type** — Big Shoulders (display, 800 caps), Archivo (body/UI), Space Mono
+(labels + the seal arcs). No italic emphasis-words — emphasis comes from the
+sentence, or from scale, weight, and color blocks.
 
-**Illustration** — circles, rectangles, triangles only; thick strokes, flat
-fills, asymmetric compositions; the logo aperture recurs as a motif. Covers are
-`600×400` (3:2).
+**Illustration** — circles, rectangles, triangles, carved: rough displacement
+edges, gouge marks, flat fills, off-register color passes. Covers are `600×400`
+(3:2).
 
 **Voice** — like a friend who happens to be good at software. "We," not the
 company name; "you," not "clients." Allergic to *leverage / synergy / solutions
@@ -80,11 +85,11 @@ company name; "you," not "clients." Allergic to *leverage / synergy / solutions
 
 ## Applying the brand beyond the site
 
-Because it's built from simple geometric pieces in three colors, it travels well:
-- **Business cards** — mark on the front, contact on the back in Fraunces / DM Sans, warm uncoated stock near the paper color.
-- **Invoices & proposals** — primary lockup header, DM Sans body, the red-bar rule for section breaks.
-- **Slide decks** — cream background, ink text, one primary accent per slide.
-- **Social avatars** — the favicon works as-is on a cream square.
+Because it's built from simple carved pieces in three colors, it travels well:
+- **Business cards** — the seal on the front, contact on the back in Big Shoulders / Archivo, warm uncoated stock.
+- **Invoices & proposals** — seal in the header, Archivo body, Space Mono labels.
+- **Slide decks** — one room color per slide (blue lead, red sparingly), paper type, yellow only for the thing you want clicked or remembered.
+- **Social avatars** — the favicon (the sun on blue) works as-is.
 
 Need a new icon? Build it from the same vocabulary (circle + rectangle +
 triangle, two colors max plus ink and paper) and it'll match. `DESIGN.md` has
