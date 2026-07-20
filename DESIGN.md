@@ -188,12 +188,70 @@ Every illustration reads as **carved and printed**, not drawn:
   fills; proof a hand held the tool. Two or three per block, not confetti.
 - **Icon chips** — services and features get a 58–60px square block (blue or
   yellow, alternating, rough-filtered) with a two-color carved figure.
-- **Flat fills only.** No gradients, no blurs. Off-register color passes
-  (a duplicate shape offset 5–6px in a second primary) are welcome grit.
-- **Covers** stay `600×400` (3:2), hand-authored SVG. The existing covers
-  (geometric-flat, v2 era) remain valid until recut in linocut style — both
-  read as prints on the paper card slot. A missing cover degrades to a clean
-  paper block, never a broken image.
+- **Flat fills only.** No gradients, no blurs.
+
+### Misregistration — the technique that sells it
+
+Rough edges alone still read as "digital pretending to be print." What makes it
+land is that a block print is pressed in **separate plates that never line up
+perfectly.** Build every illustration in two passes:
+
+1. **Color plate** — flat fill, *no stroke*, offset **+5–6px down-right**.
+2. **Ink plate** — outlines and solid ink at **true position**, wrapped in a
+   rough filter.
+
+```svg
+<!-- COLOR PLATE: pressed first, slipped -->
+<g transform="translate(6, 6)">
+  <circle cx="175" cy="135" r="22" fill="#1F4E8C"/>
+</g>
+<!-- INK PLATE: carved, true position -->
+<g filter="url(#rough2)">
+  <circle cx="175" cy="135" r="22" fill="none" stroke="#141414" stroke-width="3"/>
+</g>
+```
+
+**Rules that keep it from turning to mush:**
+
+- **One direction per piece.** Every plate slips the same way — one press, one
+  slip. Mixed offset directions read as broken, not printed.
+- **5–6px at `600×400`.** Beyond ~10px it stops reading as a misprint and
+  starts reading as a mistake.
+- **Light tone surfaces stay on the key plate.** Big paper-ish shapes (a card,
+  a sheet stack, a bag) keep their fill *registered* with their outline. Slip
+  only the chromatic accents — blue, red, yellow. If everything slips, the
+  illustration dissolves.
+- **Watch the paint order.** An opaque surface drawn in the ink plate will
+  cover the color plate beneath it. When color accents sit *on* a surface, draw
+  them in their own group **after** that surface, then their outlines after
+  that: key plate → color plate → ink plate.
+- **Under solid-ink shapes**, offset in Ink Mute `#6B6A62` — a grey plate under
+  a black one, not a drop shadow.
+- **Misregistration scales with display size.** Only apply it at **≥240px**.
+  The seal at 64px, the favicon, and the 58px icon chips stay perfectly
+  registered — at small sizes the slip just reads as blur. That is why
+  `#sun-on-blue-lg` (misregistered, hero only) is a separate def from
+  `#sun-on-blue` (registered, nav and seal).
+
+**Two valid idioms**, and mixing them across the set is fine:
+- **Key-block** — color plates under carved ink outlines (the four covers:
+  Bangers N Mash, Third Brain OS, Park PPA, MC Peels).
+- **Reduction** — flat rough-filtered shapes with no outlines at all, one
+  off-register pass for grit (`household-ledger.svg`).
+
+- **Covers** stay `600×400` (3:2), hand-authored SVG, all cut in the linocut
+  language. A missing cover degrades to a clean paper block, never a broken
+  image.
+- **Cover grounds carry rhythm.** Most covers sit on paper; a minority take a
+  full-bleed primary (MC Peels on red, Household Ledger on blue). Keep at least
+  two colored grounds in the set so no single cover is the lone outlier, and
+  don't let them cluster — check the gallery as a grid after adding a project,
+  since order comes from `projects.json`. A cover that reads pale is usually
+  paper-on-paper; moving it to a primary ground fixes the composition and the
+  set at the same time.
+- **Compositions lean asymmetric** — one dominant element off-centre, small
+  accents in the opposite field. Dead-centred and balanced is the one thing
+  that reliably kills the poster feel.
 
 ---
 
