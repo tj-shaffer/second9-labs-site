@@ -4,48 +4,63 @@
       <feTurbulence type="fractalNoise" baseFrequency="0.04" numOctaves="2" seed="63" result="n"/>
       <feDisplacementMap in="SourceGraphic" in2="n" scale="3" xChannelSelector="R" yChannelSelector="G"/>
     </filter>
+    <filter id="mp-rough" x="-8%" y="-8%" width="116%" height="116%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.038" numOctaves="3" seed="19" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="5"/>
+    </filter>
   </defs>
 
-  <rect x="0" y="0" width="600" height="400" fill="#F2ECDE"/>
+  <!-- red room: the second room, and the right ground for food -->
+  <rect x="0" y="0" width="600" height="400" fill="#D42A1F"/>
 
-  <!-- ============ COLOR PLATE (slipped down-right) ============ -->
+  <!-- ============ COLOR PLATE: produce, slipped down-right ============ -->
   <g transform="translate(6, 6)">
-    <!-- produce, pressed first -->
-    <path d="M330 76 L382 168 L278 168 Z" fill="#1F4E8C"/>
-    <circle cx="386" cy="140" r="25" fill="#F2B01E"/>
-    <circle cx="300" cy="132" r="33" fill="#D42A1F"/>
-    <!-- bag body + cuff -->
-    <rect x="250" y="180" width="210" height="180" rx="10" fill="#F8F3E4"/>
-    <rect x="238" y="156" width="234" height="40" rx="8" fill="#E8DFC8"/>
-    <!-- the lemon that rolled out -->
-    <circle cx="150" cy="318" r="18" fill="#F2B01E"/>
+    <polygon points="375,58 423,150 327,150" fill="#1F4E8C"/>
+    <circle cx="415" cy="118" r="32" fill="#F2B01E"/>
   </g>
 
-  <!-- ============ INK PLATE (carved, true position) ============ -->
+  <!-- ============ KEY + INK: produce (bottoms tuck behind the cuff) ============ -->
   <g filter="url(#mp-ink)">
-    <!-- grocery bag body -->
-    <rect x="250" y="180" width="210" height="180" rx="10" fill="#F8F3E4" stroke="#141414" stroke-width="4"/>
-    <line x1="312" y1="198" x2="312" y2="352" stroke="#6B6A62" stroke-width="2"/>
-    <line x1="392" y1="198" x2="392" y2="352" stroke="#6B6A62" stroke-width="2"/>
+    <circle cx="295" cy="115" r="44" fill="#F8F3E4" stroke="#141414" stroke-width="3.5"/>
+    <circle cx="295" cy="115" r="13" fill="#141414"/>
+    <polygon points="375,58 423,150 327,150" fill="none" stroke="#141414" stroke-width="3.5" stroke-linejoin="round"/>
+    <circle cx="415" cy="118" r="32" fill="none" stroke="#141414" stroke-width="3.5"/>
+    <rect x="292" y="58" width="7" height="18" fill="#141414"/>
+  </g>
 
-    <!-- produce poking out (drawn before the cuff so their bottoms tuck in) -->
-    <path d="M330 76 L382 168 L278 168 Z" fill="none" stroke="#141414" stroke-width="3" stroke-linejoin="round"/>
-    <circle cx="386" cy="140" r="25" fill="none" stroke="#141414" stroke-width="3"/>
-    <circle cx="300" cy="132" r="33" fill="none" stroke="#141414" stroke-width="3"/>
-    <circle cx="300" cy="132" r="12" fill="#F2ECDE" stroke="#141414" stroke-width="2"/>
-    <rect x="297" y="86" width="6" height="16" fill="#141414"/>
+  <!-- ============ KEY + INK: the bag, set off-centre ============ -->
+  <g filter="url(#mp-ink)">
+    <!-- body -->
+    <rect x="230" y="180" width="230" height="185" rx="10" fill="#F8F3E4" stroke="#141414" stroke-width="4"/>
+    <line x1="295" y1="198" x2="295" y2="357" stroke="#6B6A62" stroke-width="2"/>
+    <line x1="395" y1="198" x2="395" y2="357" stroke="#6B6A62" stroke-width="2"/>
+    <!-- folded rim, covers the produce bottoms -->
+    <rect x="217" y="148" width="256" height="44" rx="8" fill="#E8DFC8" stroke="#141414" stroke-width="4"/>
+  </g>
 
-    <!-- bag cuff (folded rim), covers the produce bottoms -->
-    <rect x="238" y="156" width="234" height="40" rx="8" fill="#E8DFC8" stroke="#141414" stroke-width="4"/>
+  <!-- ============ COLOR PLATE: the diet tag, slipped ============ -->
+  <rect x="276" y="256" width="150" height="52" rx="8" fill="#F2B01E"/>
 
-    <!-- a lemon that rolled out -->
-    <circle cx="150" cy="318" r="18" fill="none" stroke="#141414" stroke-width="2.5"/>
+  <!-- ============ INK PLATE: tag outline + the check ============ -->
+  <g filter="url(#mp-ink)">
+    <rect x="270" y="250" width="150" height="52" rx="8" fill="none" stroke="#141414" stroke-width="3.5"/>
+    <path d="M292 276 L306 291 L334 261" fill="none" stroke="#141414" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+    <line x1="350" y1="270" x2="397" y2="270" stroke="#141414" stroke-width="5" stroke-linecap="round"/>
+    <line x1="350" y1="286" x2="381" y2="286" stroke="#141414" stroke-width="5" stroke-linecap="round"/>
+  </g>
 
-    <!-- gouge marks -->
-    <g fill="#F2ECDE">
-      <path d="M 274 300 q 16 -6 32 -4 l 0 3 q -16 -1 -32 4 z"/>
-      <path d="M 420 236 l 13 -5 l 1 3 l -13 5 z"/>
-      <path d="M 316 118 l 10 -4 l 1 2 l -10 4 z"/>
-    </g>
+  <!-- ============ the lemon that rolled out ============ -->
+  <circle cx="106" cy="326" r="22" fill="#F2B01E"/>
+  <g filter="url(#mp-ink)">
+    <circle cx="100" cy="320" r="22" fill="none" stroke="#141414" stroke-width="3.5"/>
+  </g>
+
+  <!-- ============ gouge marks — proof a hand held the tool ============ -->
+  <g fill="#F2ECDE" filter="url(#mp-rough)">
+    <path d="M 64 104 q 20 -7 40 -5 l 0 5 q -21 -1 -40 5 z"/>
+    <path d="M 132 214 l 16 -6 l 1 4 l -16 6 z"/>
+    <path d="M 74 250 l 5 24 l -5 1 l -6 -24 z"/>
+    <path d="M 516 128 l 6 26 l -6 1 l -7 -26 z"/>
+    <path d="M 508 330 l 22 -8 l 2 5 l -22 8 z"/>
   </g>
 </svg>

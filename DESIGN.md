@@ -242,6 +242,16 @@ perfectly.** Build every illustration in two passes:
 - **Covers** stay `600×400` (3:2), hand-authored SVG, all cut in the linocut
   language. A missing cover degrades to a clean paper block, never a broken
   image.
+- **Cover grounds carry rhythm.** Most covers sit on paper; a minority take a
+  full-bleed primary (MC Peels on red, Household Ledger on blue). Keep at least
+  two colored grounds in the set so no single cover is the lone outlier, and
+  don't let them cluster — check the gallery as a grid after adding a project,
+  since order comes from `projects.json`. A cover that reads pale is usually
+  paper-on-paper; moving it to a primary ground fixes the composition and the
+  set at the same time.
+- **Compositions lean asymmetric** — one dominant element off-centre, small
+  accents in the opposite field. Dead-centred and balanced is the one thing
+  that reliably kills the poster feel.
 
 ---
 
