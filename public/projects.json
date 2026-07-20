@@ -59,6 +59,22 @@
       "description": "MC Peels is a household grocery concierge: say what you want in plain language and it builds a ready-to-checkout Instacart or Kroger cart, automatically filtered to your family's standing dietary rules. Save a recipe from TikTok or Pinterest, and once a household has saved enough of one cuisine, MC Peels mints a themed AI-designed kitchen around it — a name, a voice, a palette, all its own.",
       "url": "https://mc-peels.secondninelabs.com",
       "featured": true
+    },
+    {
+      "id": "household-ledger",
+      "title": "The Household Ledger — private family financial fitness",
+      "client": "Second 9 Labs",
+      "year": "2026",
+      "tagline": "Your family's whole financial picture, in one calm view — a fitness score, debt payoff, and the money you're leaving on the table, encrypted entirely on your device.",
+      "tags": ["Family finance", "Privacy-first", "Financial planning"],
+      "cover": "assets/images/household-ledger.svg",
+      "images": [
+        "assets/images/household-ledger.svg"
+      ],
+      "description": "The Household Ledger is a privacy-first financial dashboard for families: net worth, a 0-100 financial-fitness score, debt payoff strategy, real-estate equity, college-savings projections, and a ranked money-finder of tax and savings opportunities — all computed from numbers the household types in themselves, encrypted in the browser with AES-GCM, and never sent anywhere.",
+      "contributor": { "name": "Kelsey Kerce", "role": "Ideated & built by", "badge": "Guest build" },
+      "url": "https://ledger.secondninelabs.com",
+      "featured": false
     }
   ]
 }

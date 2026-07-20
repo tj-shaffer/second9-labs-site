@@ -104,6 +104,16 @@ Edit `public/projects.json`. To add a project, copy an existing block and set
 it a `url` (card links out) **or** `description` + `outcome` + `stack` + `links`
 (card opens a detail page). Add `featured: true` to surface it on the home strip.
 
+**Guest contributors.** A project built with an outside hand can name them:
+```json
+"contributor": { "name": "Kelsey Kerce", "role": "Ideated & built by", "badge": "Guest build" }
+```
+`projects.js` then renders a yellow chip on the cover (`badge`, defaults to
+"Guest") and a `role · name` credit line under the tags (`.guest-badge` /
+`.project-credit` in `styles.css`). A bare string is accepted as the name. Omit
+the field and nothing renders — the other cards are unaffected. Set `role` to
+whatever is actually true of the collaboration. See the `household-ledger` entry.
+
 ### Anti-patterns to avoid
 - **Don't add a Worker script or bindings back** unless the site genuinely grows
   a backend need — it's intentionally assets-only now.

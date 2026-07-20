@@ -6,6 +6,14 @@
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
   }[c]));
 
+  // A project can name an outside collaborator:
+  //   "contributor": { "name": "Ada Lovelace", "role": "Guest contributor" }
+  // A bare string is accepted as the name. Present => a "Guest" chip on the
+  // cover and a credit line under the tags.
+  const normalizeContributor = (c) => (!c ? null : (typeof c === 'string' ? { name: c } : c));
+  const creditLine = (c) =>
+    `<div class="project-credit">${escapeHtml(c.role || 'Guest contributor')} · <strong>${escapeHtml(c.name)}</strong></div>`;
+
   async function loadProjects() {
     try {
       const res = await fetch('projects.json', { cache: 'no-cache' });
@@ -31,10 +39,12 @@
     mount.innerHTML = projects.map((p, i) => {
       const href = p.url ? escapeHtml(p.url) : 'project.html?id=' + encodeURIComponent(p.id);
       const external = p.url && /^https?:\/\//.test(p.url);
+      const contrib = normalizeContributor(p.contributor);
       return `
       <a class="project-card reveal" href="${href}"${external ? ' target="_blank" rel="noopener"' : ''} style="transition-delay: ${Math.min(i * 0.08, 0.4)}s">
         <div class="project-cover">
           <img src="${escapeHtml(p.cover)}" alt="" loading="lazy" />
+          ${contrib ? `<span class="guest-badge">${escapeHtml(contrib.badge || 'Guest')}</span>` : ''}
         </div>
         <div class="project-body">
           <div class="project-meta">
@@ -46,6 +56,7 @@
           <div class="project-tags">
             ${(p.tags || []).map(t => `<span class="tag">${escapeHtml(t)}</span>`).join('')}
           </div>
+          ${contrib ? creditLine(contrib) : ''}
         </div>
       </a>
     `;
@@ -98,6 +109,7 @@
         <div class="project-tags">
           ${(project.tags || []).map(t => `<span class="tag">${escapeHtml(t)}</span>`).join('')}
         </div>
+        ${normalizeContributor(project.contributor) ? creditLine(normalizeContributor(project.contributor)) : ''}
       </div>
 
       <div class="project-hero-image">

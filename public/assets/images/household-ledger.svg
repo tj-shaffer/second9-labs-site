@@ -1,0 +1,53 @@
+<svg viewBox="0 0 600 400" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="The Household Ledger — private family financial fitness">
+  <defs>
+    <filter id="hlRough1" x="-8%" y="-8%" width="116%" height="116%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.038" numOctaves="3" seed="7" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="6"/>
+    </filter>
+    <filter id="hlRough2" x="-8%" y="-8%" width="116%" height="116%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.05" numOctaves="3" seed="23" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="5"/>
+    </filter>
+  </defs>
+
+  <!-- blue room -->
+  <rect x="0" y="0" width="600" height="400" fill="#1F4E8C"/>
+
+  <!-- off-register red pass behind the dial (print grit) -->
+  <circle cx="252" cy="212" r="110" fill="#D42A1F" filter="url(#hlRough2)"/>
+
+  <!-- the fitness dial -->
+  <circle cx="246" cy="206" r="110" fill="#F2ECDE" filter="url(#hlRough1)"/>
+
+  <!-- nine carved ticks — the nine rays as a counting motif -->
+  <g fill="#141414" filter="url(#hlRough2)">
+    <g transform="rotate(-100 246 206)"><rect x="241" y="104" width="10" height="24"/></g>
+    <g transform="rotate(-75 246 206)"><rect x="241" y="104" width="10" height="24"/></g>
+    <g transform="rotate(-50 246 206)"><rect x="241" y="104" width="10" height="24"/></g>
+    <g transform="rotate(-25 246 206)"><rect x="241" y="104" width="10" height="24"/></g>
+    <g transform="rotate(0 246 206)"><rect x="241" y="104" width="10" height="24"/></g>
+    <g transform="rotate(25 246 206)"><rect x="241" y="104" width="10" height="24"/></g>
+    <g transform="rotate(50 246 206)"><rect x="241" y="104" width="10" height="24"/></g>
+    <g transform="rotate(75 246 206)"><rect x="241" y="104" width="10" height="24"/></g>
+    <g transform="rotate(100 246 206)"><rect x="241" y="104" width="10" height="24"/></g>
+  </g>
+
+  <!-- the needle, reading high -->
+  <g transform="rotate(38 246 206)" filter="url(#hlRough2)">
+    <polygon points="239,206 253,206 246,118" fill="#141414"/>
+  </g>
+
+  <!-- hub -->
+  <circle cx="246" cy="206" r="18" fill="#F2B01E" filter="url(#hlRough2)"/>
+  <circle cx="246" cy="206" r="7" fill="#141414"/>
+
+  <!-- ranked opportunities: the top one is the money on the table -->
+  <rect x="400" y="140" width="152" height="32" fill="#F2B01E" filter="url(#hlRough1)"/>
+  <rect x="400" y="188" width="126" height="26" fill="#F2ECDE" filter="url(#hlRough2)"/>
+  <rect x="400" y="230" width="100" height="26" fill="#F2ECDE" filter="url(#hlRough2)"/>
+
+  <!-- gouge marks — proof a hand held the tool -->
+  <polygon points="56,74 65,70 59,140 51,134" fill="#F2ECDE"/>
+  <polygon points="548,296 557,292 551,352 543,346" fill="#F2ECDE"/>
+  <polygon points="120,344 129,340 124,378 116,374" fill="#F2ECDE"/>
+</svg>
