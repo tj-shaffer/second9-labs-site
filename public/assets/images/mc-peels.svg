@@ -1,21 +1,51 @@
 <svg viewBox="0 0 600 400" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="MC Peels — the grocery concierge">
+  <defs>
+    <filter id="mp-ink" x="-8%" y="-8%" width="116%" height="116%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.04" numOctaves="2" seed="63" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="3" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+  </defs>
+
   <rect x="0" y="0" width="600" height="400" fill="#F2ECDE"/>
 
-  <!-- grocery bag body -->
-  <rect x="250" y="180" width="210" height="180" rx="10" fill="#F8F3E4" stroke="#141414" stroke-width="4"/>
-  <line x1="312" y1="198" x2="312" y2="352" stroke="#6B6A62" stroke-width="2"/>
-  <line x1="392" y1="198" x2="392" y2="352" stroke="#6B6A62" stroke-width="2"/>
+  <!-- ============ COLOR PLATE (slipped down-right) ============ -->
+  <g transform="translate(6, 6)">
+    <!-- produce, pressed first -->
+    <path d="M330 76 L382 168 L278 168 Z" fill="#1F4E8C"/>
+    <circle cx="386" cy="140" r="25" fill="#F2B01E"/>
+    <circle cx="300" cy="132" r="33" fill="#D42A1F"/>
+    <!-- bag body + cuff -->
+    <rect x="250" y="180" width="210" height="180" rx="10" fill="#F8F3E4"/>
+    <rect x="238" y="156" width="234" height="40" rx="8" fill="#E8DFC8"/>
+    <!-- the lemon that rolled out -->
+    <circle cx="150" cy="318" r="18" fill="#F2B01E"/>
+  </g>
 
-  <!-- produce poking out (drawn before the cuff so their bottoms tuck into the bag) -->
-  <path d="M330 76 L382 168 L278 168 Z" fill="#1F4E8C" stroke="#141414" stroke-width="3" stroke-linejoin="round"/>
-  <circle cx="386" cy="140" r="25" fill="#F2B01E" stroke="#141414" stroke-width="3"/>
-  <circle cx="300" cy="132" r="33" fill="#D42A1F" stroke="#141414" stroke-width="3"/>
-  <circle cx="300" cy="132" r="12" fill="#F2ECDE"/>
-  <rect x="297" y="86" width="6" height="16" fill="#141414"/>
+  <!-- ============ INK PLATE (carved, true position) ============ -->
+  <g filter="url(#mp-ink)">
+    <!-- grocery bag body -->
+    <rect x="250" y="180" width="210" height="180" rx="10" fill="#F8F3E4" stroke="#141414" stroke-width="4"/>
+    <line x1="312" y1="198" x2="312" y2="352" stroke="#6B6A62" stroke-width="2"/>
+    <line x1="392" y1="198" x2="392" y2="352" stroke="#6B6A62" stroke-width="2"/>
 
-  <!-- bag cuff (folded rim), covers the produce bottoms -->
-  <rect x="238" y="156" width="234" height="40" rx="8" fill="#E8DFC8" stroke="#141414" stroke-width="4"/>
+    <!-- produce poking out (drawn before the cuff so their bottoms tuck in) -->
+    <path d="M330 76 L382 168 L278 168 Z" fill="none" stroke="#141414" stroke-width="3" stroke-linejoin="round"/>
+    <circle cx="386" cy="140" r="25" fill="none" stroke="#141414" stroke-width="3"/>
+    <circle cx="300" cy="132" r="33" fill="none" stroke="#141414" stroke-width="3"/>
+    <circle cx="300" cy="132" r="12" fill="#F2ECDE" stroke="#141414" stroke-width="2"/>
+    <rect x="297" y="86" width="6" height="16" fill="#141414"/>
 
-  <!-- a lemon that rolled out -->
-  <circle cx="150" cy="318" r="18" fill="#F2B01E" stroke="#141414" stroke-width="2.5"/>
+    <!-- bag cuff (folded rim), covers the produce bottoms -->
+    <rect x="238" y="156" width="234" height="40" rx="8" fill="#E8DFC8" stroke="#141414" stroke-width="4"/>
+
+    <!-- a lemon that rolled out -->
+    <circle cx="150" cy="318" r="18" fill="none" stroke="#141414" stroke-width="2.5"/>
+
+    <!-- gouge marks -->
+    <g fill="#F2ECDE">
+      <path d="M 274 300 q 16 -6 32 -4 l 0 3 q -16 -1 -32 4 z"/>
+      <path d="M 420 236 l 13 -5 l 1 3 l -13 5 z"/>
+      <path d="M 316 118 l 10 -4 l 1 2 l -10 4 z"/>
+    </g>
+  </g>
 </svg>
